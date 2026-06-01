@@ -23,6 +23,7 @@
 - `send-desktop-message.mjs`：命令行发送脚本，保持 UTF-8，适合发送中文。
 - `read-process-env.ps1`：读取当前用户进程环境变量，用于获取 sidecar 本机认证信息。
 - `BACKGROUND.md`：项目背景和设计边界。
+- `ARCHITECTURE.md`：OpenCode 子代理架构、任务生命周期、MCP 工具设计。
 - `ROADMAP.md`：功能进度和待办。
 
 ## Codex MCP 配置示例

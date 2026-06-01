@@ -1,5 +1,7 @@
 # 功能进度
 
+架构原则见 `ARCHITECTURE.md`。后续功能应优先围绕 `OpenCode as sub-agent` 的任务抽象实现，而不是继续扩展零散的底层 wrapper。
+
 ## 已完成
 
 - [x] MCP stdio server：`server.mjs`
@@ -17,6 +19,9 @@
 
 ## 进行中 / 待完善
 
+- [ ] 子代理任务接口：`opencode_task_start`
+- [ ] 任务状态查询：`opencode_task_status`
+- [ ] 任务结果读取：`opencode_task_result`
 - [ ] 权限交互：当 OpenCode agent 请求用户授权时，暴露权限列表和通过/拒绝接口。
 - [ ] 会话列表：列出已有 OpenCode sessions，便于 MCP 客户端选择目标对话。
 - [ ] 会话消息读取：读取指定 session 的历史消息。
