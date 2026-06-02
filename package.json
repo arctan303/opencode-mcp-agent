@@ -3,13 +3,12 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "description": "Bridge Codex to a running OpenCode desktop sidecar.",
+  "description": "Expose OpenCode as a managed MCP sub-agent runtime.",
   "bin": {
-    "codex-opencode-bridge": "./server.mjs",
-    "opencode-desktop-send": "./send-desktop-message.mjs"
+    "codex-opencode-bridge": "./server.mjs"
   },
   "scripts": {
-    "check": "node --check server.mjs && node --check send-desktop-message.mjs"
+    "check": "node --check server.mjs && node --check src/config.mjs && node --check src/constants.mjs && node --check src/handlers.mjs && node --check src/index.mjs && node --check src/process.mjs && node --check src/sidecar.mjs && node --check src/tools.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -1,88 +1,78 @@
 # 架构设计
 
-本文档定义 `Codex OpenCode Bridge` 的目标架构。核心原则是：对外暴露 OpenCode 子代理能力，而不是暴露某个具体桌面端或命令行实现细节。
+本文档定义 Codex OpenCode Bridge 的目标架构。核心原则：OpenCode 是一个受管子代理 runtime，不是桌面端窗口，也不是简单 CLI wrapper。
 
-## 目标抽象
-
-MCP 客户端看到的应该是一个可调用的 OpenCode agent worker：
+## 总体架构
 
 ```text
 MCP Client
-  -> Codex OpenCode Bridge MCP
-    -> OpenCode Agent Worker
-      -> backend: desktop | headless
-        -> OpenCode session / model / workspace / tools
+  -> Codex OpenCode Bridge MCP Server
+    -> Task Manager
+      -> Managed OpenCode Runtime
+        -> opencode serve
+        -> OpenCode API
 ```
 
-上游客户端的核心动作是“把任务派给 OpenCode”，而不是“向某个 HTTP endpoint 发消息”。
+MCP 客户端发起任务；桥接器管理 OpenCode runtime、session、权限和结果；OpenCode 执行实际 agent 工作。
 
 ## 核心对象
 
 ### Task
 
-`task` 是 MCP 对外的主要执行单元。
+Task 是 MCP 对外的主要执行单元。
 
-字段建议：
+建议字段：
 
 - `taskID`：桥接器生成的任务 ID。
-- `sessionID`：OpenCode session ID。
+- `status`：任务状态。
 - `workspace`：任务工作空间。
 - `model`：OpenCode 模型。
 - `agent`：OpenCode agent。
-- `backend`：实际使用的 backend。
-- `status`：任务状态。
+- `sessionID`：OpenCode session ID。
+- `messageID`：OpenCode message ID。
 - `createdAt`
 - `updatedAt`
-- `lastMessageID`
 - `result`
 - `error`
+- `permissionRequests`
 
 ### Session
 
-`session` 是 OpenCode 的上下文载体。
+Session 是 OpenCode 的上下文载体。
 
-桥接器不重新发明对话系统，只复用 OpenCode session：
+- 指定 `sessionID` 时继续已有会话。
+- 不指定 `sessionID` 时创建新会话。
+- Task 必须关联一个 session。
+- 长期上下文以 OpenCode session 为准，bridge task 只是调度记录。
 
-- 指定 `sessionID` 时继续已有对话。
-- 不指定 `sessionID` 时创建新对话。
-- 一个 task 必须关联一个 session。
+### Runtime
 
-### Workspace
+Runtime 是桥接器启动和管理的 OpenCode 服务实例。
 
-`workspace` 是 OpenCode 执行任务的项目根目录。
+第一版 runtime：
 
-每个 task 都应显式带上 workspace，或由客户端配置默认 workspace。不要隐式依赖桥接器自身的当前目录。
+- 通过 `opencode serve` 启动。
+- 绑定 `127.0.0.1`。
+- 使用随机可用端口。
+- 使用随机 BasicAuth。
+- 认证只存在于当前 bridge 进程内。
 
-### Backend
-
-`backend` 是桥接器连接 OpenCode 的实际方式。
-
-建议取值：
-
-- `auto`
-- `desktop`
-- `headless`
-
-第一版优先实现 `desktop`，但接口层保持 backend 可替换。
-
-## 任务生命周期
+## 任务状态
 
 建议状态：
 
 - `queued`：任务已创建，尚未开始。
 - `running`：OpenCode 正在执行。
 - `waiting_permission`：OpenCode 等待权限确认。
-- `completed`：任务完成并有结果。
+- `completed`：任务完成。
 - `failed`：任务失败。
 - `cancelled`：任务被取消。
 
-第一版可以同步执行，即 `opencode_task_start` 直接等待 OpenCode 返回结果。但返回结构仍应保留 `taskID` 和 `status`，为后续异步任务和轮询预留空间。
+第一版可以同步等待 OpenCode 返回，但返回结构必须保留 `taskID` 和 `status`，为后续异步任务预留空间。
 
 ## MCP 工具设计
 
-### 高层工具
-
-这些是面向 MCP 客户端的主接口。
+### 主工具
 
 #### `opencode_task_start`
 
@@ -95,20 +85,21 @@ MCP Client
 - `model?`
 - `agent?`
 - `sessionID?`
-- `backend?`
 - `title?`
 - `wait?`
+- `timeoutMs?`
 
 输出：
 
 - `taskID`
 - `status`
 - `sessionID`
-- `messageID`
+- `messageID?`
 - `responseText?`
-- `backend`
 - `workspace`
 - `model`
+- `agent`
+- `error?`
 
 #### `opencode_task_status`
 
@@ -123,9 +114,9 @@ MCP Client
 - `taskID`
 - `status`
 - `sessionID`
-- `lastMessageID`
-- `error?`
+- `messageID?`
 - `permissionRequests?`
+- `error?`
 
 #### `opencode_task_result`
 
@@ -140,14 +131,16 @@ MCP Client
 - `taskID`
 - `status`
 - `sessionID`
-- `responseText`
+- `responseText?`
 - `messages?`
 - `changes?`
 - `error?`
 
-### 权限工具
+#### `opencode_task_cancel`
 
-这些工具用于转发 OpenCode 的权限请求，而不是绕过权限系统。
+取消正在运行的任务。
+
+### 权限工具
 
 #### `opencode_permission_list`
 
@@ -169,103 +162,77 @@ MCP Client
 
 #### `opencode_model_list`
 
-列出 OpenCode 当前可用模型。
+列出 OpenCode 可用模型。
 
-#### `opencode_backend_status`
+#### `opencode_runtime_status`
 
-检查 backend 状态，例如 Desktop 是否运行、sidecar 是否可连接。
+检查受管 OpenCode runtime 是否运行。
 
-#### `opencode_backend_launch`
+#### `opencode_runtime_start`
 
-按需启动 backend，例如启动 OpenCode Desktop。
+启动受管 OpenCode runtime。
 
-## Backend 设计
+#### `opencode_runtime_stop`
 
-### Desktop backend
+停止受管 OpenCode runtime。
 
-当前已验证的路径：
+## Runtime 管理
 
-```text
-OpenCode.exe
-  -> opencode-cli serve --hostname 127.0.0.1 --port <port>
-```
+### 启动
 
-桥接器需要：
+Bridge 启动时可以延迟启动 runtime。第一次调用 `opencode_task_start` 时，如果 runtime 不存在，则自动启动。
 
-1. 找到 OpenCode Desktop 进程。
-2. 找到 Desktop sidecar 进程和端口。
-3. 读取 sidecar BasicAuth 环境变量。
-4. 调用 sidecar API 创建或复用 session。
-5. 发送消息。
-6. 读取回复。
-7. 必要时请求 Desktop 切换到目标 session。
+启动策略：
 
-优点：
+1. 查找 OpenCode CLI。
+2. 分配随机可用端口。
+3. 生成随机 username/password。
+4. 设置 `OPENCODE_SERVER_USERNAME` 和 `OPENCODE_SERVER_PASSWORD`。
+5. 启动 `opencode serve --hostname 127.0.0.1 --port <port>`。
+6. 等待 `/session` 或 health endpoint 可访问。
 
-- 用户可在桌面端看到 OpenCode 会话。
-- 更符合“代替用户控制 OpenCode”的直觉。
+OpenCode CLI 查找优先级：
 
-缺点：
+1. `OPENCODE_BIN` 环境变量。
+2. PATH 里的 `opencode` / `opencode.exe`。
+3. npm global 安装路径。
+4. Desktop bundled `opencode-cli.exe` 作为最后 fallback。
 
-- 依赖 Desktop 运行。
-- 当前认证读取方式与平台相关。
+### 认证
 
-### Headless backend
+认证只保存在 bridge 进程内：
 
-未来可以直接调用：
+- 不写日志。
+- 不写配置文件。
+- 不返回给 MCP 客户端。
+- runtime 重启后重新生成。
 
-- `opencode run`
-- 独立 `opencode serve`
+### 关闭
 
-优点：
+Bridge 可以提供 `opencode_runtime_stop`。是否自动关闭 runtime 由后续配置决定。
 
-- 不依赖桌面 UI。
-- 更适合自动化。
+## Desktop 位置
 
-缺点：
+Desktop 不作为核心 backend。
 
-- 用户不一定能在 OpenCode Desktop 里实时看到任务。
-- 与 Desktop session 同步关系需要额外验证。
+如果未来需要让用户查看某个 session，可以单独设计 viewer 功能。但 viewer 不能影响主任务执行链路，也不能成为默认路径。
 
 ## 兼容层
 
-现有底层工具可以保留，但应作为 low-level/debug 接口：
+现有工具可以临时保留，但不作为推荐接口：
 
-- `opencode_desktop_send`
 - `opencode_run`
 - `opencode_start_server`
+- `opencode_desktop_send` 如果仍存在，只能作为 debug/legacy。
 
-新架构下，推荐 MCP 客户端优先使用：
-
-- `opencode_task_start`
-- `opencode_task_status`
-- `opencode_task_result`
-
-低层工具服务于调试、兼容和 backend 实现，不作为长期主接口。
-
-## 权限原则
-
-桥接器可以代替用户向 OpenCode 下发指令，但不能绕过 OpenCode 的权限系统。
-
-正确做法：
-
-1. OpenCode 请求权限。
-2. 桥接器检测并暴露该请求。
-3. MCP 客户端展示或决策。
-4. MCP 客户端调用 `opencode_permission_reply`。
-5. 桥接器把 allow/deny 回传给 OpenCode。
+长期推荐接口只有 task/session/model/permission/runtime 这组子代理语义工具。
 
 ## 第一版实现策略
 
-第一版应避免一次性重写所有代码。
-
-建议步骤：
-
-1. 保留已验证的 Desktop sidecar 调用逻辑。
-2. 在其上新增 `opencode_task_start`。
-3. 返回 `taskID`、`status`、`sessionID`、`responseText`。
-4. 第一版先同步等待结果。
-5. 再补 `session_list`、`messages`、`model_list`。
-6. 最后做权限工具和异步任务。
-
-这样可以先把对外抽象定正确，同时复用已经可工作的 desktop backend。
+1. 清理 Desktop 主线相关代码。
+2. 抽出 managed runtime 模块。
+3. 让 `opencode_task_start` 使用 managed runtime。
+4. 使用随机端口和随机 BasicAuth，替代固定 `31555` 和固定密码。
+5. 保留内存 task map，但明确它是临时状态。
+6. 文档和 README 全部改为 headless 子代理定位。
+7. 探测脚本移动到 `dev/` 或不提交。
