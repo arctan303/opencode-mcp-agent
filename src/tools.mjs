@@ -43,6 +43,19 @@ export const coreTools = [
     },
   },
   {
+    name: "opencode_task_list",
+    description: "List recent OpenCode tasks tracked by this bridge.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspace: { type: "string", description: "Optional workspace filter." },
+        cwd: { type: "string", description: "Deprecated alias for workspace." },
+        status: { type: "string", description: "Optional status filter, for example running or completed." },
+        limit: { type: "number", default: 20 },
+      },
+    },
+  },
+  {
     name: "opencode_task_result",
     description: "Get the result of an OpenCode task.",
     inputSchema: {

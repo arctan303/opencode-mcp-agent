@@ -18,6 +18,8 @@ import { persistTasks, taskMapFromState } from "./state.mjs";
 const serverProcesses = new Map();
 const activeRequests = new Map();
 const tasks = taskMapFromState();
+const ACTIVE_STATUSES = new Set(["running", "waiting_permission", "cancel_requested"]);
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 function text(content) {
   return { content: [{ type: "text", text: String(content) }] };
@@ -51,6 +53,14 @@ function taskSummary(taskRecord) {
   };
 }
 
+function resolveRequiredWorkspace(input) {
+  const workspace = input.workspace || input.cwd;
+  if (!workspace) {
+    throw new Error("workspace is required. Pass an explicit project directory; the bridge does not infer client workspace automatically.");
+  }
+  return workspace;
+}
+
 async function fetchSessionMessages(taskRecord, options = {}) {
   if (!taskRecord.sessionID) return null;
   const workspace = taskRecord.workspace || process.cwd();
@@ -74,7 +84,18 @@ async function syncTaskProgress(taskRecord, options = {}) {
       limit: options.limit || 20,
       timeoutMs: options.timeoutMs || 30000,
     });
-    taskRecord.progress = deriveProgress(messages);
+    const progress = deriveProgress(messages);
+    taskRecord.progress = progress;
+    if (
+      ACTIVE_STATUSES.has(taskRecord.status) &&
+      progress.lastAssistantCompleted &&
+      progress.lastAssistantFinish &&
+      progress.lastAssistantFinish !== "tool-calls"
+    ) {
+      taskRecord.status = "completed";
+      taskRecord.assistantMessageID = progress.lastAssistantMessageID || taskRecord.assistantMessageID;
+      taskRecord.responseText = progress.lastAssistantText || taskRecord.responseText;
+    }
     taskRecord.progressSyncedAt = new Date().toISOString();
     saveTask(taskRecord);
   } catch (error) {
@@ -121,7 +142,7 @@ export async function callTool(name, input = {}) {
   if (name === "opencode_task_start") {
     const timeoutMs = input.timeoutMs || 600000;
     const prompt = input.prompt || input.message;
-    const workspace = input.workspace || input.cwd || process.cwd();
+    const workspace = resolveRequiredWorkspace(input);
     if (!prompt) throw new Error("opencode_task_start requires prompt.");
     const query = `directory=${encodeURIComponent(workspace)}`;
     const sidecar = await getManagedRuntime({
@@ -214,10 +235,25 @@ export async function callTool(name, input = {}) {
     return text(JSON.stringify(taskRecord, null, 2));
   }
 
+  if (name === "opencode_task_list") {
+    const limit = input.limit || 20;
+    const workspace = input.workspace || input.cwd;
+    const status = input.status;
+    const records = Array.from(tasks.values())
+      .filter((taskRecord) => !workspace || taskRecord.workspace === workspace)
+      .filter((taskRecord) => !status || taskRecord.status === status)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .slice(0, limit)
+      .map(taskSummary);
+    return text(JSON.stringify({ tasks: records }, null, 2));
+  }
+
   if (name === "opencode_task_status") {
     const taskRecord = tasks.get(input.taskID);
     if (!taskRecord) throw new Error(`Task not found: ${input.taskID}`);
-    if (input.refresh !== false) {
+    const shouldRefresh = input.refresh === true ||
+      (input.refresh !== false && ACTIVE_STATUSES.has(taskRecord.status));
+    if (shouldRefresh) {
       await syncTaskProgress(taskRecord, { timeoutMs: input.timeoutMs || 30000 });
     }
     return text(JSON.stringify(taskSummary(taskRecord), null, 2));
@@ -226,7 +262,7 @@ export async function callTool(name, input = {}) {
   if (name === "opencode_task_result") {
     const taskRecord = tasks.get(input.taskID);
     if (!taskRecord) throw new Error(`Task not found: ${input.taskID}`);
-    if (input.refresh) {
+    if (input.refresh || ACTIVE_STATUSES.has(taskRecord.status)) {
       await syncTaskProgress(taskRecord, { timeoutMs: input.timeoutMs || 30000 });
     }
     return text(JSON.stringify(taskRecord, null, 2));
@@ -262,7 +298,7 @@ export async function callTool(name, input = {}) {
       saveTask(taskRecord);
       return text(JSON.stringify({ cancelled: true, task: taskSummary(taskRecord) }, null, 2));
     }
-    if (["completed", "failed", "cancelled"].includes(taskRecord.status)) {
+    if (TERMINAL_STATUSES.has(taskRecord.status)) {
       return text(JSON.stringify({ cancelled: false, reason: "task_not_running", sessionAbort, task: taskSummary(taskRecord) }, null, 2));
     }
     taskRecord.status = sessionAbort === true ? "cancelled" : "cancel_requested";

@@ -71,6 +71,10 @@ export function deriveProgress(messages) {
     lastRole: null,
     lastPartType: null,
     lastTextPreview: "",
+    lastAssistantMessageID: null,
+    lastAssistantFinish: null,
+    lastAssistantText: "",
+    lastAssistantCompleted: false,
     lastActivityAt: null,
     hasOpenAssistantMessage: false,
   };
@@ -79,6 +83,13 @@ export function deriveProgress(messages) {
   for (const message of list) {
     if (message?.info?.id) progress.lastMessageID = message.info.id;
     if (message?.info?.role) progress.lastRole = message.info.role;
+    if (message?.info?.role === "assistant") {
+      progress.lastAssistantMessageID = message.info.id || progress.lastAssistantMessageID;
+      progress.lastAssistantFinish = message.info.finish || null;
+      progress.lastAssistantCompleted = Boolean(message.info?.time?.completed);
+      const assistantText = collectTextParts(message.parts);
+      if (assistantText) progress.lastAssistantText = assistantText;
+    }
     const infoActivity = timestampFromTime(message?.info?.time);
     if (infoActivity && infoActivity > lastActivity) lastActivity = infoActivity;
     if (message?.info?.role === "assistant" && !message?.info?.time?.completed) {

@@ -15,6 +15,7 @@
 - [x] runtime 健康检查：复用前探测 `/session`，异常时丢弃并重启
 - [x] Windows OpenCode 解析：优先 `OPENCODE_BIN` / npm global exe，再 fallback 到 PATH 和 Desktop bundled
 - [x] `opencode_task_start` 使用 managed runtime
+- [x] `opencode_task_list`
 - [x] `opencode_task_status`
 - [x] `opencode_task_status` 同步 session 紧凑进度
 - [x] `opencode_task_result`

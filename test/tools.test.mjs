@@ -5,6 +5,7 @@ test("default tool list exposes only sub-agent core tools", async () => {
   const { tools } = await import("../src/tools.mjs");
   const names = tools.map((tool) => tool.name);
   assert.ok(names.includes("opencode_task_start"));
+  assert.ok(names.includes("opencode_task_list"));
   assert.ok(names.includes("opencode_task_cancel"));
   assert.ok(names.includes("opencode_permission_list"));
   assert.ok(names.includes("opencode_permission_reply"));

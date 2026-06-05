@@ -49,3 +49,23 @@ test("deriveProgress summarizes active messages and tool activity", () => {
   assert.deepEqual(progress.filesRead, ["C:/repo/package.json"]);
   assert.equal(progress.lastTextPreview, "Analyzing performance hot spots");
 });
+
+test("deriveProgress captures completed assistant answer", () => {
+  const messages = [{
+    info: {
+      id: "msg_final",
+      role: "assistant",
+      finish: "stop",
+      time: { created: 1000, completed: 2000 },
+    },
+    parts: [
+      { id: "part_text", type: "text", text: "Done with analysis" },
+    ],
+  }];
+
+  const progress = deriveProgress(messages);
+  assert.equal(progress.lastAssistantMessageID, "msg_final");
+  assert.equal(progress.lastAssistantFinish, "stop");
+  assert.equal(progress.lastAssistantCompleted, true);
+  assert.equal(progress.lastAssistantText, "Done with analysis");
+});
