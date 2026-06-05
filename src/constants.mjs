@@ -16,6 +16,12 @@ function pathCandidates(name) {
     .flatMap((dir) => names.map((candidate) => path.join(dir, candidate)));
 }
 
+function pathCandidatesWithExtensions(name, extensions) {
+  return (process.env.PATH || "")
+    .split(path.delimiter)
+    .flatMap((dir) => extensions.map((extension) => path.join(dir, `${name}${extension}`)));
+}
+
 function firstExisting(candidates) {
   return candidates.find((candidate) => candidate && existsSync(candidate));
 }
@@ -49,7 +55,13 @@ const desktopBundledOpenCode = path.join(
 
 export const OPENCODE = process.env.OPENCODE_BIN ||
   (process.platform === "win32"
-    ? npmGlobalOpenCodeExe
+    ? firstExisting([
+      npmGlobalOpenCodeExe,
+      ...pathCandidatesWithExtensions("opencode", [".exe", ".EXE"]),
+      desktopBundledOpenCode,
+      ...pathCandidatesWithExtensions("opencode", [".cmd", ".CMD", ".bat", ".BAT", ".com", ".COM"]),
+      npmGlobalOpenCode,
+    ]) || "opencode"
     : firstExisting([
       ...pathCandidates("opencode"),
       ...pathCandidates("opencode.exe"),

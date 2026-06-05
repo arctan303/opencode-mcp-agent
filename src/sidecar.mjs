@@ -6,6 +6,7 @@ import { OPENCODE, OPENCODE_SOURCE } from "./constants.mjs";
 
 let runtime = null;
 let runtimePromise = null;
+const MAX_LOG_BYTES = 64 * 1024;
 
 async function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -39,7 +40,7 @@ async function waitForRuntime(candidate, timeoutMs) {
   let lastError = "";
   while (Date.now() < deadline) {
     try {
-      await sidecarJson(candidate, "GET", "/session", undefined, 5000);
+      await assertRuntimeHealthy(candidate, 5000);
       return;
     } catch (error) {
       lastError = error.message;
@@ -49,8 +50,22 @@ async function waitForRuntime(candidate, timeoutMs) {
   throw new Error(`Timed out waiting for OpenCode runtime. ${lastError}`.trim());
 }
 
+function appendLog(candidate, key, chunk) {
+  candidate[key] += chunk.toString();
+  if (candidate[key].length > MAX_LOG_BYTES) {
+    candidate[key] = candidate[key].slice(-MAX_LOG_BYTES);
+  }
+}
+
 export async function getManagedRuntime(options = {}) {
-  if (runtime?.process && !runtime.process.killed) return runtime;
+  if (runtime?.process && !runtime.process.killed && runtime.exitCode === undefined) {
+    try {
+      await assertRuntimeHealthy(runtime, options.healthTimeoutMs || 3000);
+      return runtime;
+    } catch {
+      stopManagedRuntime();
+    }
+  }
   if (runtimePromise) return runtimePromise;
 
   runtimePromise = startManagedRuntime(options).finally(() => {
@@ -60,6 +75,13 @@ export async function getManagedRuntime(options = {}) {
 }
 
 export async function startManagedRuntime(options = {}) {
+  if (!options.forceRestart) {
+    const existing = await getExistingHealthyRuntime(options);
+    if (existing) return existing;
+  } else {
+    stopManagedRuntime();
+  }
+
   if (!existsSync(OPENCODE)) {
     throw new Error(`OpenCode binary not found: ${OPENCODE}`);
   }
@@ -97,10 +119,10 @@ export async function startManagedRuntime(options = {}) {
   };
 
   child.stdout.on("data", (chunk) => {
-    candidate.stdout += chunk.toString();
+    appendLog(candidate, "stdout", chunk);
   });
   child.stderr.on("data", (chunk) => {
-    candidate.stderr += chunk.toString();
+    appendLog(candidate, "stderr", chunk);
   });
   child.on("close", (code) => {
     candidate.exitCode = code;
@@ -145,8 +167,31 @@ export function stopManagedRuntime() {
   return { stopped: true, pid: current.pid, port: current.port };
 }
 
-export async function sidecarJson(sidecar, method, endpoint, body, timeoutMs) {
+async function getExistingHealthyRuntime(options = {}) {
+  if (!runtime?.process || runtime.process.killed || runtime.exitCode !== undefined) return null;
+  try {
+    await assertRuntimeHealthy(runtime, options.healthTimeoutMs || 3000);
+    return runtime;
+  } catch {
+    stopManagedRuntime();
+    return null;
+  }
+}
+
+export async function assertRuntimeHealthy(candidate, timeoutMs = 3000) {
+  const health = await sidecarJson(candidate, "GET", "/global/health", undefined, timeoutMs);
+  if (health && health.healthy === false) {
+    throw new Error(`OpenCode runtime reported unhealthy: ${JSON.stringify(health)}`);
+  }
+}
+
+export async function sidecarJson(sidecar, method, endpoint, body, timeoutMs, options = {}) {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener("abort", abort, { once: true });
+  }
   const timer = setTimeout(() => controller.abort(), timeoutMs || 180000);
   try {
     const response = await fetch(`${sidecar.baseUrl}${endpoint}`, {
@@ -169,5 +214,6 @@ export async function sidecarJson(sidecar, method, endpoint, body, timeoutMs) {
     return parsed;
   } finally {
     clearTimeout(timer);
+    if (options.signal) options.signal.removeEventListener("abort", abort);
   }
 }

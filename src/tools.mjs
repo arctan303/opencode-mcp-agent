@@ -1,4 +1,4 @@
-export const tools = [
+export const coreTools = [
   {
     name: "opencode_task_start",
     description: "Start a task in a managed OpenCode runtime.",
@@ -47,6 +47,18 @@ export const tools = [
       type: "object",
       properties: {
         taskID: { type: "string" },
+      },
+      required: ["taskID"],
+    },
+  },
+  {
+    name: "opencode_task_cancel",
+    description: "Cancel an active OpenCode task started by this bridge process.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        taskID: { type: "string" },
+        timeoutMs: { type: "number", default: 30000 },
       },
       required: ["taskID"],
     },
@@ -115,6 +127,40 @@ export const tools = [
       },
     },
   },
+  {
+    name: "opencode_permission_list",
+    description: "List permission requests detected in tracked tasks or a session message history.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionID: { type: "string", description: "Optional session ID to scan." },
+        workspace: { type: "string", description: "Workspace directory for session lookup." },
+        timeoutMs: { type: "number", default: 30000 },
+      },
+    },
+  },
+  {
+    name: "opencode_permission_reply",
+    description: "Reply to an OpenCode permission request.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionID: { type: "string" },
+        taskID: { type: "string" },
+        permissionID: { type: "string", description: "OpenCode permission request ID." },
+        requestID: { type: "string", description: "Deprecated alias for permissionID." },
+        decision: { type: "string", enum: ["allow", "deny"], description: "allow maps to once/always; deny maps to reject." },
+        response: { type: "string", enum: ["once", "always", "reject"], description: "Native OpenCode permission response." },
+        remember: { type: "boolean", default: false, description: "When decision is allow, remember maps to the native always response." },
+        workspace: { type: "string", description: "Workspace directory for the session." },
+        timeoutMs: { type: "number", default: 30000 },
+      },
+      required: ["sessionID"],
+    },
+  },
+];
+
+export const debugTools = [
   {
     name: "opencode_run",
     description:
@@ -200,3 +246,7 @@ export const tools = [
     },
   },
 ];
+
+export const tools = process.env.OPENCODE_BRIDGE_DEBUG_TOOLS === "1"
+  ? [...coreTools, ...debugTools]
+  : coreTools;

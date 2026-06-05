@@ -1,17 +1,18 @@
 import { spawn } from "node:child_process";
 import { CONFIG, OPENCODE } from "./constants.mjs";
-import { runCommand, runProcess } from "./process.mjs";
+import { runCommand } from "./process.mjs";
 import {
   getManagedRuntime,
   getRuntimeStatus,
   sidecarJson,
-  startManagedRuntime,
   stopManagedRuntime,
 } from "./sidecar.mjs";
 import { readConfig, writeConfig, redacted } from "./config.mjs";
+import { persistTasks, taskMapFromState } from "./state.mjs";
 
 const serverProcesses = new Map();
-const tasks = new Map();
+const activeRequests = new Map();
+const tasks = taskMapFromState();
 
 function text(content) {
   return { content: [{ type: "text", text: String(content) }] };
@@ -30,6 +31,47 @@ function collectTextParts(parts) {
     .map((part) => part.text)
     .join("\n")
     .trim();
+}
+
+function saveTask(taskRecord) {
+  taskRecord.updatedAt = new Date().toISOString();
+  tasks.set(taskRecord.taskID, taskRecord);
+  persistTasks(tasks);
+}
+
+function taskSummary(taskRecord) {
+  return {
+    taskID: taskRecord.taskID,
+    status: taskRecord.status,
+    sessionID: taskRecord.sessionID,
+    workspace: taskRecord.workspace,
+    model: taskRecord.model,
+    agent: taskRecord.agent,
+    assistantMessageID: taskRecord.assistantMessageID,
+    permissionRequests: taskRecord.permissionRequests || [],
+    error: taskRecord.error,
+    updatedAt: taskRecord.updatedAt,
+  };
+}
+
+function findPermissionRequests(value, out = []) {
+  if (!value || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    for (const item of value) findPermissionRequests(item, out);
+    return out;
+  }
+  const type = String(value.type || value.kind || value.name || "").toLowerCase();
+  const status = String(value.status || value.state || "").toLowerCase();
+  if (
+    type.includes("permission") ||
+    type.includes("approval") ||
+    status.includes("permission") ||
+    status.includes("approval")
+  ) {
+    out.push(value);
+  }
+  for (const child of Object.values(value)) findPermissionRequests(child, out);
+  return out;
 }
 
 export async function callTool(name, input = {}) {
@@ -95,8 +137,10 @@ export async function callTool(name, input = {}) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    tasks.set(taskID, taskRecord);
+    saveTask(taskRecord);
 
+    const controller = new AbortController();
+    activeRequests.set(taskID, controller);
     const runTask = sidecarJson(
       sidecar,
       "POST",
@@ -108,18 +152,31 @@ export async function callTool(name, input = {}) {
         parts: [{ type: "text", text: prompt }],
       },
       timeoutMs,
+      { signal: controller.signal },
     ).then((message) => {
-      taskRecord.status = "completed";
+      if (taskRecord.status === "cancelled") return taskRecord;
+      const permissionRequests = findPermissionRequests(message);
+      taskRecord.status = permissionRequests.length ? "waiting_permission" : "completed";
       taskRecord.responseText = collectTextParts(message?.parts);
       taskRecord.assistantMessageID = message?.info?.id;
       taskRecord.partCount = Array.isArray(message?.parts) ? message.parts.length : undefined;
-      taskRecord.updatedAt = new Date().toISOString();
+      taskRecord.permissionRequests = permissionRequests;
+      saveTask(taskRecord);
       return taskRecord;
     }).catch((err) => {
+      if (taskRecord.status === "cancelled" || controller.signal.aborted) {
+        taskRecord.status = "cancelled";
+        taskRecord.error = null;
+        taskRecord.cancelledAt = new Date().toISOString();
+        saveTask(taskRecord);
+        return taskRecord;
+      }
       taskRecord.status = "failed";
       taskRecord.error = err.message;
-      taskRecord.updatedAt = new Date().toISOString();
+      saveTask(taskRecord);
       return taskRecord;
+    }).finally(() => {
+      activeRequests.delete(taskID);
     });
 
     if (input.wait) await runTask;
@@ -129,16 +186,7 @@ export async function callTool(name, input = {}) {
   if (name === "opencode_task_status") {
     const taskRecord = tasks.get(input.taskID);
     if (!taskRecord) throw new Error(`Task not found: ${input.taskID}`);
-    return text(JSON.stringify({
-      taskID: taskRecord.taskID,
-      status: taskRecord.status,
-      sessionID: taskRecord.sessionID,
-      workspace: taskRecord.workspace,
-      model: taskRecord.model,
-      agent: taskRecord.agent,
-      assistantMessageID: taskRecord.assistantMessageID,
-      error: taskRecord.error
-    }, null, 2));
+    return text(JSON.stringify(taskSummary(taskRecord), null, 2));
   }
 
   if (name === "opencode_task_result") {
@@ -147,12 +195,55 @@ export async function callTool(name, input = {}) {
     return text(JSON.stringify(taskRecord, null, 2));
   }
 
+  if (name === "opencode_task_cancel") {
+    const taskRecord = tasks.get(input.taskID);
+    if (!taskRecord) throw new Error(`Task not found: ${input.taskID}`);
+    const active = activeRequests.get(input.taskID);
+    let sessionAbort = null;
+    if (taskRecord.sessionID) {
+      try {
+        const sidecar = await getManagedRuntime({ cwd: taskRecord.workspace || process.cwd(), timeoutMs: input.timeoutMs || 30000 });
+        const params = new URLSearchParams();
+        if (taskRecord.workspace) params.set("directory", taskRecord.workspace);
+        const query = params.toString();
+        sessionAbort = await sidecarJson(
+          sidecar,
+          "POST",
+          `/session/${encodeURIComponent(taskRecord.sessionID)}/abort${query ? `?${query}` : ""}`,
+          undefined,
+          input.timeoutMs || 30000,
+        );
+      } catch (error) {
+        sessionAbort = { ok: false, error: error.message };
+      }
+    }
+    if (active) {
+      taskRecord.status = "cancelled";
+      taskRecord.cancelledAt = new Date().toISOString();
+      taskRecord.sessionAbort = sessionAbort;
+      active.abort();
+      saveTask(taskRecord);
+      return text(JSON.stringify({ cancelled: true, task: taskSummary(taskRecord) }, null, 2));
+    }
+    if (["completed", "failed", "cancelled"].includes(taskRecord.status)) {
+      return text(JSON.stringify({ cancelled: false, reason: "task_not_running", sessionAbort, task: taskSummary(taskRecord) }, null, 2));
+    }
+    taskRecord.status = sessionAbort === true ? "cancelled" : "cancel_requested";
+    taskRecord.cancelRequestedAt = new Date().toISOString();
+    taskRecord.sessionAbort = sessionAbort;
+    taskRecord.cancelNote = sessionAbort === true
+      ? "OpenCode session abort endpoint returned true."
+      : "The task is not active in this bridge process; OpenCode may still be running in its session.";
+    saveTask(taskRecord);
+    return text(JSON.stringify({ cancelled: sessionAbort === true, reason: "active_request_not_found", sessionAbort, task: taskSummary(taskRecord) }, null, 2));
+  }
+
   if (name === "opencode_runtime_status") {
     return text(JSON.stringify(getRuntimeStatus(), null, 2));
   }
 
   if (name === "opencode_runtime_start") {
-    const runtime = await startManagedRuntime({
+    const runtime = await getManagedRuntime({
       cwd: input.workspace || process.cwd(),
       timeoutMs: input.timeoutMs || 60000,
     });
@@ -217,6 +308,75 @@ export async function callTool(name, input = {}) {
       }));
     }
     return text(JSON.stringify(models, null, 2));
+  }
+
+  if (name === "opencode_permission_list") {
+    const pending = [];
+    for (const taskRecord of tasks.values()) {
+      if (taskRecord.status === "waiting_permission" || taskRecord.permissionRequests?.length) {
+        pending.push({
+          taskID: taskRecord.taskID,
+          sessionID: taskRecord.sessionID,
+          workspace: taskRecord.workspace,
+          requests: taskRecord.permissionRequests || [],
+        });
+      }
+    }
+
+    if (input.sessionID) {
+      const workspace = input.workspace || process.cwd();
+      const params = new URLSearchParams();
+      params.set("directory", workspace);
+      const sidecar = await getManagedRuntime({ cwd: workspace, timeoutMs: input.timeoutMs || 30000 });
+      const messages = await sidecarJson(
+        sidecar,
+        "GET",
+        `/session/${encodeURIComponent(input.sessionID)}/message?${params.toString()}`,
+        undefined,
+        input.timeoutMs || 30000,
+      );
+      pending.push({
+        sessionID: input.sessionID,
+        workspace,
+        requests: findPermissionRequests(messages),
+        source: "session_messages",
+      });
+    }
+
+    return text(JSON.stringify({ pending }, null, 2));
+  }
+
+  if (name === "opencode_permission_reply") {
+    const workspace = input.workspace || process.cwd();
+    const sessionID = input.sessionID;
+    const permissionID = input.permissionID || input.requestID;
+    if (!sessionID) throw new Error("opencode_permission_reply requires sessionID.");
+    if (!permissionID) throw new Error("opencode_permission_reply requires permissionID or requestID.");
+    const decision = input.decision || input.response;
+    if (!decision) throw new Error("opencode_permission_reply requires decision or response.");
+    const response = input.response ||
+      (decision === "allow" ? (input.remember ? "always" : "once") : "reject");
+    if (!["once", "always", "reject"].includes(response)) {
+      throw new Error(`Unsupported permission response: ${response}`);
+    }
+    const params = new URLSearchParams();
+    params.set("directory", workspace);
+    const sidecar = await getManagedRuntime({ cwd: workspace, timeoutMs: input.timeoutMs || 30000 });
+    const result = await sidecarJson(
+      sidecar,
+      "POST",
+      `/session/${encodeURIComponent(sessionID)}/permissions/${encodeURIComponent(permissionID)}?${params.toString()}`,
+      { response, remember: Boolean(input.remember) },
+      input.timeoutMs || 30000,
+    );
+    return text(JSON.stringify({
+      ok: Boolean(result),
+      sessionID,
+      permissionID,
+      response,
+      remember: Boolean(input.remember),
+      result,
+    }, null, 2));
   }
 
   if (name === "opencode_models") {
