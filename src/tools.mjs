@@ -31,11 +31,13 @@ export const coreTools = [
   },
   {
     name: "opencode_task_status",
-    description: "Check the status of an OpenCode task.",
+    description: "Check the status of an OpenCode task, including compact session progress when available.",
     inputSchema: {
       type: "object",
       properties: {
         taskID: { type: "string" },
+        refresh: { type: "boolean", default: true, description: "Refresh progress from the OpenCode session before returning." },
+        timeoutMs: { type: "number", default: 30000 },
       },
       required: ["taskID"],
     },
@@ -47,6 +49,8 @@ export const coreTools = [
       type: "object",
       properties: {
         taskID: { type: "string" },
+        refresh: { type: "boolean", default: false, description: "Refresh progress from the OpenCode session before returning." },
+        timeoutMs: { type: "number", default: 30000 },
       },
       required: ["taskID"],
     },
@@ -111,6 +115,8 @@ export const coreTools = [
         sessionID: { type: "string" },
         workspace: { type: "string", description: "Workspace directory for the session." },
         limit: { type: "number", default: 50 },
+        verbose: { type: "boolean", default: false, description: "Return full raw OpenCode messages instead of compact summaries." },
+        maxPartText: { type: "number", default: 500, description: "Maximum text/output preview length per message part when verbose is false." },
       },
       required: ["sessionID"],
     },

@@ -16,11 +16,13 @@
 - [x] Windows OpenCode 解析：优先 `OPENCODE_BIN` / npm global exe，再 fallback 到 PATH 和 Desktop bundled
 - [x] `opencode_task_start` 使用 managed runtime
 - [x] `opencode_task_status`
+- [x] `opencode_task_status` 同步 session 紧凑进度
 - [x] `opencode_task_result`
 - [x] `opencode_task_cancel`：当前进程内活跃请求可 abort；跨进程恢复任务会明确返回无法保证已停止
 - [x] task 状态持久化到本机 JSON state file
 - [x] `opencode_session_list`
 - [x] `opencode_session_messages`
+- [x] `opencode_session_messages` 默认压缩大段 tool 输出，避免 MCP 响应过大
 - [x] `opencode_model_list`
 - [x] `opencode_runtime_status`
 - [x] `opencode_runtime_start`

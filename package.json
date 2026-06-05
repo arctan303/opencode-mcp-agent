@@ -8,7 +8,7 @@
     "codex-opencode-bridge": "./server.mjs"
   },
   "scripts": {
-    "check": "node --check server.mjs && node --check src/config.mjs && node --check src/constants.mjs && node --check src/handlers.mjs && node --check src/index.mjs && node --check src/process.mjs && node --check src/sidecar.mjs && node --check src/state.mjs && node --check src/tools.mjs && node --test test/*.mjs"
+    "check": "node --check server.mjs && node --check src/config.mjs && node --check src/constants.mjs && node --check src/handlers.mjs && node --check src/index.mjs && node --check src/messages.mjs && node --check src/process.mjs && node --check src/sidecar.mjs && node --check src/state.mjs && node --check src/tools.mjs && node --test test/*.mjs"
   },
   "engines": {
     "node": ">=18"

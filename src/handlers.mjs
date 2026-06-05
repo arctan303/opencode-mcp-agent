@@ -8,6 +8,11 @@ import {
   stopManagedRuntime,
 } from "./sidecar.mjs";
 import { readConfig, writeConfig, redacted } from "./config.mjs";
+import {
+  collectTextParts,
+  compactMessages,
+  deriveProgress,
+} from "./messages.mjs";
 import { persistTasks, taskMapFromState } from "./state.mjs";
 
 const serverProcesses = new Map();
@@ -22,15 +27,6 @@ function splitModel(model = "deepseek/deepseek-v4-pro") {
   const index = model.indexOf("/");
   if (index < 1) throw new Error(`Model must be provider/model: ${model}`);
   return { providerID: model.slice(0, index), modelID: model.slice(index + 1) };
-}
-
-function collectTextParts(parts) {
-  if (!Array.isArray(parts)) return "";
-  return parts
-    .filter((part) => part && part.type === "text" && typeof part.text === "string")
-    .map((part) => part.text)
-    .join("\n")
-    .trim();
 }
 
 function saveTask(taskRecord) {
@@ -49,9 +45,44 @@ function taskSummary(taskRecord) {
     agent: taskRecord.agent,
     assistantMessageID: taskRecord.assistantMessageID,
     permissionRequests: taskRecord.permissionRequests || [],
+    progress: taskRecord.progress,
     error: taskRecord.error,
     updatedAt: taskRecord.updatedAt,
   };
+}
+
+async function fetchSessionMessages(taskRecord, options = {}) {
+  if (!taskRecord.sessionID) return null;
+  const workspace = taskRecord.workspace || process.cwd();
+  const params = new URLSearchParams();
+  params.set("directory", workspace);
+  if (options.limit) params.set("limit", String(options.limit));
+  const sidecar = await getManagedRuntime({ cwd: workspace, timeoutMs: options.timeoutMs || 30000 });
+  return sidecarJson(
+    sidecar,
+    "GET",
+    `/session/${encodeURIComponent(taskRecord.sessionID)}/message?${params.toString()}`,
+    undefined,
+    options.timeoutMs || 30000,
+  );
+}
+
+async function syncTaskProgress(taskRecord, options = {}) {
+  if (!taskRecord.sessionID) return taskRecord;
+  try {
+    const messages = await fetchSessionMessages(taskRecord, {
+      limit: options.limit || 20,
+      timeoutMs: options.timeoutMs || 30000,
+    });
+    taskRecord.progress = deriveProgress(messages);
+    taskRecord.progressSyncedAt = new Date().toISOString();
+    saveTask(taskRecord);
+  } catch (error) {
+    taskRecord.progressSyncError = error.message;
+    taskRecord.progressSyncedAt = new Date().toISOString();
+    saveTask(taskRecord);
+  }
+  return taskRecord;
 }
 
 function findPermissionRequests(value, out = []) {
@@ -186,12 +217,18 @@ export async function callTool(name, input = {}) {
   if (name === "opencode_task_status") {
     const taskRecord = tasks.get(input.taskID);
     if (!taskRecord) throw new Error(`Task not found: ${input.taskID}`);
+    if (input.refresh !== false) {
+      await syncTaskProgress(taskRecord, { timeoutMs: input.timeoutMs || 30000 });
+    }
     return text(JSON.stringify(taskSummary(taskRecord), null, 2));
   }
 
   if (name === "opencode_task_result") {
     const taskRecord = tasks.get(input.taskID);
     if (!taskRecord) throw new Error(`Task not found: ${input.taskID}`);
+    if (input.refresh) {
+      await syncTaskProgress(taskRecord, { timeoutMs: input.timeoutMs || 30000 });
+    }
     return text(JSON.stringify(taskRecord, null, 2));
   }
 
@@ -287,7 +324,10 @@ export async function callTool(name, input = {}) {
       undefined,
       input.timeoutMs || 30000,
     );
-    return text(JSON.stringify(messages, null, 2));
+    const output = input.verbose
+      ? messages
+      : compactMessages(messages, { maxPartText: input.maxPartText || 500 });
+    return text(JSON.stringify(output, null, 2));
   }
 
   if (name === "opencode_model_list") {
