@@ -5,7 +5,7 @@
 ## 已完成
 
 - [x] MCP stdio server 基础入口
-- [x] MCP 请求队列，避免长工具调用和 stdin 解析互相干扰
+- [x] MCP JSON-RPC 并发处理，长任务等待期间仍可查询状态和回复权限
 - [x] OpenCode API 调用验证
 - [x] session 创建/复用验证
 - [x] 发送消息并读取 OpenCode agent 回复验证
@@ -37,13 +37,15 @@
 ## 权限能力
 
 - [x] 暴露 `opencode_permission_list`
-- [x] 任务结果中扫描并记录疑似 permission / approval 请求
-- [x] 当任务返回疑似权限请求时标记 `waiting_permission`
-- [x] 确认 OpenCode 官方 permission reply API：`POST /session/:id/permissions/:permissionID`
+- [x] 通过 `GET /permission` 读取真实待处理权限
+- [x] 任务状态同步权限队列并标记 `waiting_permission`
+- [x] 确认 OpenCode 官方 permission reply API：`POST /permission/:requestID/reply`
 - [x] 接入真实权限回复 endpoint
 - [x] 暴露 `opencode_permission_reply`
+- [x] 暴露运行中和阻塞中的工具名称、call ID、输入摘要与持续时间
+- [x] 真实 `edit: ask` 回归测试：发现权限、回复 `once`、任务继续并完成
 
-当前策略：`decision: "allow"` 默认回复 `once`；传 `remember: true` 时回复 `always`；`decision: "deny"` 回复 `reject`。仍需要更多真实权限阻塞场景测试，确保 permission request ID 的提取逻辑覆盖 OpenCode 返回的所有 part 形态。
+当前策略：`decision: "allow"` 默认回复 `once`；传 `remember: true` 时回复 `always`；`decision: "deny"` 回复 `reject`。权限请求以 OpenCode 权限队列为准，不再从消息 part 猜测。
 
 ## 下一步主线
 
@@ -51,6 +53,7 @@
 - [ ] 为 OpenCode API 增加适配层，隔离 `/session`、`/api/model` 等端点变动
 - [ ] 增加 runtime crash 后的任务恢复提示：通过 `sessionID` 拉取历史并更新 task
 - [ ] 增加更多 mock OpenCode server 测试，覆盖 runtime 重启、HTTP 失败、取消、权限扫描
+- [ ] 增加权限策略配置，在明确授权范围内支持受控自动批准
 - [ ] 清理或压缩 `dev/` 中无效探测产物
 
 ## 非主线 / 暂缓

@@ -187,12 +187,21 @@ export async function assertRuntimeHealthy(candidate, timeoutMs = 3000) {
 
 export async function sidecarJson(sidecar, method, endpoint, body, timeoutMs, options = {}) {
   const controller = new AbortController();
-  const abort = () => controller.abort();
+  let externallyAborted = false;
+  let timedOut = false;
+  const abort = () => {
+    externallyAborted = true;
+    controller.abort();
+  };
   if (options.signal) {
     if (options.signal.aborted) controller.abort();
     else options.signal.addEventListener("abort", abort, { once: true });
   }
-  const timer = setTimeout(() => controller.abort(), timeoutMs || 180000);
+  const effectiveTimeoutMs = timeoutMs || 180000;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, effectiveTimeoutMs);
   try {
     const response = await fetch(`${sidecar.baseUrl}${endpoint}`, {
       method,
@@ -212,6 +221,19 @@ export async function sidecarJson(sidecar, method, endpoint, body, timeoutMs, op
       throw new Error(`OpenCode runtime ${method} ${endpoint} failed: ${response.status} ${JSON.stringify(parsed)}`);
     }
     return parsed;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const wrapped = new Error(
+        timedOut
+          ? `OpenCode request timed out after ${effectiveTimeoutMs}ms: ${method} ${endpoint}`
+          : `OpenCode request was cancelled: ${method} ${endpoint}`,
+      );
+      wrapped.code = timedOut ? "OPENCODE_REQUEST_TIMEOUT" : "OPENCODE_REQUEST_CANCELLED";
+      wrapped.cause = error;
+      wrapped.externallyAborted = externallyAborted;
+      throw wrapped;
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
     if (options.signal) options.signal.removeEventListener("abort", abort);

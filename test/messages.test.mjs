@@ -69,3 +69,29 @@ test("deriveProgress captures completed assistant answer", () => {
   assert.equal(progress.lastAssistantCompleted, true);
   assert.equal(progress.lastAssistantText, "Done with analysis");
 });
+
+test("deriveProgress exposes running tool details", () => {
+  const messages = [{
+    info: { id: "msg_running", role: "assistant", time: { created: 1000 } },
+    parts: [{
+      id: "part_edit",
+      messageID: "msg_running",
+      type: "tool",
+      tool: "edit",
+      callID: "call_edit",
+      state: {
+        status: "running",
+        title: "Update app",
+        input: { filePath: "C:/repo/app.js", oldString: "before", newString: "after" },
+      },
+      time: { start: Date.now() - 2500 },
+    }],
+  }];
+
+  const progress = deriveProgress(messages);
+  assert.equal(progress.toolCalls.running, 1);
+  assert.equal(progress.runningTools[0].tool, "edit");
+  assert.equal(progress.runningTools[0].callID, "call_edit");
+  assert.match(progress.runningTools[0].inputSummary, /C:\/repo\/app\.js/);
+  assert.ok(progress.runningTools[0].durationMs >= 2000);
+});

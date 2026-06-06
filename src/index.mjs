@@ -32,23 +32,19 @@ async function handleRequest(request) {
   };
 }
 
-let queue = Promise.resolve();
-
-function enqueue(line) {
-  queue = queue.then(async () => {
-    let request;
-    try {
-      request = JSON.parse(line);
-      const response = await handleRequest(request);
-      if (response) send(response);
-    } catch (error) {
-      send({
-        jsonrpc: "2.0",
-        id: request?.id ?? null,
-        error: { code: -32000, message: error.message },
-      });
-    }
-  });
+async function processLine(line) {
+  let request;
+  try {
+    request = JSON.parse(line);
+    const response = await handleRequest(request);
+    if (response) send(response);
+  } catch (error) {
+    send({
+      jsonrpc: "2.0",
+      id: request?.id ?? null,
+      error: { code: -32000, message: error.message },
+    });
+  }
 }
 
 let buffer = "";
@@ -60,6 +56,6 @@ process.stdin.on("data", (chunk) => {
     const line = buffer.slice(0, newline).trim();
     buffer = buffer.slice(newline + 1);
     if (!line) continue;
-    enqueue(line);
+    void processLine(line);
   }
 });

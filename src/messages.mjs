@@ -22,6 +22,11 @@ export function collectTextParts(parts) {
     .trim();
 }
 
+function summarizeToolInput(input, maxLength = 300) {
+  if (!input || typeof input !== "object") return input ?? null;
+  return truncateText(JSON.stringify(input), maxLength);
+}
+
 export function compactMessage(message, options = {}) {
   const maxPartText = options.maxPartText || 500;
   return {
@@ -66,6 +71,8 @@ export function deriveProgress(messages) {
   const progress = {
     messageCount: list.length,
     toolCalls: { total: 0, completed: 0, running: 0, failed: 0 },
+    runningTools: [],
+    blockedToolCalls: [],
     filesRead: [],
     lastMessageID: null,
     lastRole: null,
@@ -108,7 +115,22 @@ export function deriveProgress(messages) {
         const status = part.state?.status;
         if (status === "completed") progress.toolCalls.completed += 1;
         else if (status === "failed" || status === "error") progress.toolCalls.failed += 1;
-        else progress.toolCalls.running += 1;
+        else {
+          progress.toolCalls.running += 1;
+          const startedAtMs = part.time?.start || part.state?.time?.start || null;
+          progress.runningTools.push({
+            tool: part.tool,
+            callID: part.callID,
+            messageID: part.messageID || message?.info?.id,
+            status: status || "running",
+            title: part.state?.title || null,
+            inputSummary: summarizeToolInput(part.state?.input),
+            startedAt: isoFromMs(startedAtMs),
+            durationMs: typeof startedAtMs === "number"
+              ? Math.max(0, Date.now() - startedAtMs)
+              : null,
+          });
+        }
         const filePath = part.state?.input?.filePath;
         if (part.tool === "read" && filePath && !progress.filesRead.includes(filePath)) {
           progress.filesRead.push(filePath);

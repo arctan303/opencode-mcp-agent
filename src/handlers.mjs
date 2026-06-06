@@ -49,6 +49,8 @@ function taskSummary(taskRecord) {
     permissionRequests: taskRecord.permissionRequests || [],
     progress: taskRecord.progress,
     error: taskRecord.error,
+    errorCode: taskRecord.errorCode,
+    timeoutMs: taskRecord.timeoutMs,
     updatedAt: taskRecord.updatedAt,
   };
 }
@@ -77,16 +79,83 @@ async function fetchSessionMessages(taskRecord, options = {}) {
   );
 }
 
+async function fetchRuntimeState(workspace, options = {}) {
+  const timeoutMs = options.timeoutMs || 30000;
+  const params = new URLSearchParams();
+  params.set("directory", workspace);
+  const sidecar = await getManagedRuntime({ cwd: workspace, timeoutMs });
+  const query = params.toString();
+  const [sessionStatuses, permissions] = await Promise.all([
+    sidecarJson(sidecar, "GET", `/session/status?${query}`, undefined, timeoutMs),
+    sidecarJson(sidecar, "GET", `/permission?${query}`, undefined, timeoutMs),
+  ]);
+  return {
+    sessionStatuses: sessionStatuses || {},
+    permissions: Array.isArray(permissions) ? permissions : [],
+  };
+}
+
+async function abortSession(taskRecord, timeoutMs = 30000) {
+  if (!taskRecord.sessionID) return null;
+  const workspace = taskRecord.workspace || process.cwd();
+  const params = new URLSearchParams();
+  params.set("directory", workspace);
+  const sidecar = await getManagedRuntime({ cwd: workspace, timeoutMs });
+  return sidecarJson(
+    sidecar,
+    "POST",
+    `/session/${encodeURIComponent(taskRecord.sessionID)}/abort?${params.toString()}`,
+    undefined,
+    timeoutMs,
+  );
+}
+
+function permissionsForSession(permissions, sessionID) {
+  return permissions.filter((request) => !sessionID || request?.sessionID === sessionID);
+}
+
+function enrichBlockedTools(progress, permissions, sessionStatus) {
+  const runningTools = progress.runningTools || [];
+  const permissionCallIDs = new Set(
+    permissions.map((request) => request?.tool?.callID).filter(Boolean),
+  );
+  progress.blockedToolCalls = runningTools
+    .filter((tool) => permissionCallIDs.has(tool.callID) || sessionStatus?.type !== "busy")
+    .map((tool) => ({
+      ...tool,
+      reason: permissionCallIDs.has(tool.callID) ? "waiting_permission" : "session_not_busy",
+    }));
+}
+
 async function syncTaskProgress(taskRecord, options = {}) {
   if (!taskRecord.sessionID) return taskRecord;
   try {
-    const messages = await fetchSessionMessages(taskRecord, {
-      limit: options.limit || 20,
-      timeoutMs: options.timeoutMs || 30000,
-    });
+    const workspace = taskRecord.workspace || process.cwd();
+    const [messages, runtimeState] = await Promise.all([
+      fetchSessionMessages(taskRecord, {
+        limit: options.limit || 20,
+        timeoutMs: options.timeoutMs || 30000,
+      }),
+      fetchRuntimeState(workspace, options),
+    ]);
     const progress = deriveProgress(messages);
+    const permissions = permissionsForSession(
+      runtimeState.permissions,
+      taskRecord.sessionID,
+    );
+    const sessionStatus = runtimeState.sessionStatuses[taskRecord.sessionID] || { type: "idle" };
+    progress.sessionStatus = sessionStatus;
+    enrichBlockedTools(progress, permissions, sessionStatus);
     taskRecord.progress = progress;
-    if (
+    taskRecord.permissionRequests = permissions;
+    if (ACTIVE_STATUSES.has(taskRecord.status) && permissions.length) {
+      taskRecord.status = "waiting_permission";
+    } else if (
+      ACTIVE_STATUSES.has(taskRecord.status) &&
+      (sessionStatus.type === "busy" || sessionStatus.type === "retry")
+    ) {
+      taskRecord.status = "running";
+    } else if (
       ACTIVE_STATUSES.has(taskRecord.status) &&
       progress.lastAssistantCompleted &&
       progress.lastAssistantFinish &&
@@ -104,26 +173,6 @@ async function syncTaskProgress(taskRecord, options = {}) {
     saveTask(taskRecord);
   }
   return taskRecord;
-}
-
-function findPermissionRequests(value, out = []) {
-  if (!value || typeof value !== "object") return out;
-  if (Array.isArray(value)) {
-    for (const item of value) findPermissionRequests(item, out);
-    return out;
-  }
-  const type = String(value.type || value.kind || value.name || "").toLowerCase();
-  const status = String(value.status || value.state || "").toLowerCase();
-  if (
-    type.includes("permission") ||
-    type.includes("approval") ||
-    status.includes("permission") ||
-    status.includes("approval")
-  ) {
-    out.push(value);
-  }
-  for (const child of Object.values(value)) findPermissionRequests(child, out);
-  return out;
 }
 
 export async function callTool(name, input = {}) {
@@ -179,6 +228,8 @@ export async function callTool(name, input = {}) {
       agent: input.agent || "build",
       responseText: null,
       error: null,
+      errorCode: null,
+      timeoutMs,
       created,
       runtime: {
         pid: sidecar.pid,
@@ -207,15 +258,14 @@ export async function callTool(name, input = {}) {
       { signal: controller.signal },
     ).then((message) => {
       if (taskRecord.status === "cancelled") return taskRecord;
-      const permissionRequests = findPermissionRequests(message);
-      taskRecord.status = permissionRequests.length ? "waiting_permission" : "completed";
+      taskRecord.status = "completed";
       taskRecord.responseText = collectTextParts(message?.parts);
       taskRecord.assistantMessageID = message?.info?.id;
       taskRecord.partCount = Array.isArray(message?.parts) ? message.parts.length : undefined;
-      taskRecord.permissionRequests = permissionRequests;
+      taskRecord.permissionRequests = [];
       saveTask(taskRecord);
       return taskRecord;
-    }).catch((err) => {
+    }).catch(async (err) => {
       if (taskRecord.status === "cancelled" || controller.signal.aborted) {
         taskRecord.status = "cancelled";
         taskRecord.error = null;
@@ -225,6 +275,15 @@ export async function callTool(name, input = {}) {
       }
       taskRecord.status = "failed";
       taskRecord.error = err.message;
+      taskRecord.errorCode = err.code || "OPENCODE_TASK_FAILED";
+      if (err.code === "OPENCODE_REQUEST_TIMEOUT") {
+        taskRecord.error = `OpenCode task exceeded timeoutMs=${timeoutMs}. The MCP transport may have a shorter independent timeout; use wait=false and poll opencode_task_status for long tasks.`;
+        try {
+          taskRecord.sessionAbort = await abortSession(taskRecord, 30000);
+        } catch (abortError) {
+          taskRecord.sessionAbort = { ok: false, error: abortError.message };
+        }
+      }
       saveTask(taskRecord);
       return taskRecord;
     }).finally(() => {
@@ -275,17 +334,7 @@ export async function callTool(name, input = {}) {
     let sessionAbort = null;
     if (taskRecord.sessionID) {
       try {
-        const sidecar = await getManagedRuntime({ cwd: taskRecord.workspace || process.cwd(), timeoutMs: input.timeoutMs || 30000 });
-        const params = new URLSearchParams();
-        if (taskRecord.workspace) params.set("directory", taskRecord.workspace);
-        const query = params.toString();
-        sessionAbort = await sidecarJson(
-          sidecar,
-          "POST",
-          `/session/${encodeURIComponent(taskRecord.sessionID)}/abort${query ? `?${query}` : ""}`,
-          undefined,
-          input.timeoutMs || 30000,
-        );
+        sessionAbort = await abortSession(taskRecord, input.timeoutMs || 30000);
       } catch (error) {
         sessionAbort = { ok: false, error: error.message };
       }
@@ -387,46 +436,42 @@ export async function callTool(name, input = {}) {
   }
 
   if (name === "opencode_permission_list") {
-    const pending = [];
+    const workspace = input.workspace || process.cwd();
+    const runtimeState = await fetchRuntimeState(workspace, {
+      timeoutMs: input.timeoutMs || 30000,
+    });
+    const requests = permissionsForSession(runtimeState.permissions, input.sessionID);
+    const pending = requests.map((request) => {
+      const taskRecord = Array.from(tasks.values()).find(
+        (task) => task.sessionID === request.sessionID,
+      );
+      return {
+        ...request,
+        taskID: taskRecord?.taskID,
+        workspace: taskRecord?.workspace || workspace,
+      };
+    });
+    const blockedToolCalls = [];
     for (const taskRecord of tasks.values()) {
-      if (taskRecord.status === "waiting_permission" || taskRecord.permissionRequests?.length) {
-        pending.push({
+      if (
+        taskRecord.workspace === workspace &&
+        ACTIVE_STATUSES.has(taskRecord.status) &&
+        (!input.sessionID || taskRecord.sessionID === input.sessionID)
+      ) {
+        await syncTaskProgress(taskRecord, { timeoutMs: input.timeoutMs || 30000 });
+        blockedToolCalls.push(...(taskRecord.progress?.blockedToolCalls || []).map((tool) => ({
+          ...tool,
           taskID: taskRecord.taskID,
           sessionID: taskRecord.sessionID,
-          workspace: taskRecord.workspace,
-          requests: taskRecord.permissionRequests || [],
-        });
+        })));
       }
     }
-
-    if (input.sessionID) {
-      const workspace = input.workspace || process.cwd();
-      const params = new URLSearchParams();
-      params.set("directory", workspace);
-      const sidecar = await getManagedRuntime({ cwd: workspace, timeoutMs: input.timeoutMs || 30000 });
-      const messages = await sidecarJson(
-        sidecar,
-        "GET",
-        `/session/${encodeURIComponent(input.sessionID)}/message?${params.toString()}`,
-        undefined,
-        input.timeoutMs || 30000,
-      );
-      pending.push({
-        sessionID: input.sessionID,
-        workspace,
-        requests: findPermissionRequests(messages),
-        source: "session_messages",
-      });
-    }
-
-    return text(JSON.stringify({ pending }, null, 2));
+    return text(JSON.stringify({ pending, blockedToolCalls }, null, 2));
   }
 
   if (name === "opencode_permission_reply") {
     const workspace = input.workspace || process.cwd();
-    const sessionID = input.sessionID;
     const permissionID = input.permissionID || input.requestID;
-    if (!sessionID) throw new Error("opencode_permission_reply requires sessionID.");
     if (!permissionID) throw new Error("opencode_permission_reply requires permissionID or requestID.");
     const decision = input.decision || input.response;
     if (!decision) throw new Error("opencode_permission_reply requires decision or response.");
@@ -441,13 +486,19 @@ export async function callTool(name, input = {}) {
     const result = await sidecarJson(
       sidecar,
       "POST",
-      `/session/${encodeURIComponent(sessionID)}/permissions/${encodeURIComponent(permissionID)}?${params.toString()}`,
-      { response, remember: Boolean(input.remember) },
+      `/permission/${encodeURIComponent(permissionID)}/reply?${params.toString()}`,
+      { reply: response, ...(input.message ? { message: input.message } : {}) },
       input.timeoutMs || 30000,
     );
+    const taskRecord = input.taskID
+      ? tasks.get(input.taskID)
+      : Array.from(tasks.values()).find((task) => task.sessionID === input.sessionID);
+    if (taskRecord) {
+      await syncTaskProgress(taskRecord, { timeoutMs: input.timeoutMs || 30000 });
+    }
     return text(JSON.stringify({
       ok: Boolean(result),
-      sessionID,
+      sessionID: input.sessionID || taskRecord?.sessionID,
       permissionID,
       response,
       remember: Boolean(input.remember),

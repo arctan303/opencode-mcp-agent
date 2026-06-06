@@ -15,7 +15,7 @@ export const coreTools = [
         agent: { type: "string", default: "build" },
         sessionID: { type: "string", description: "Existing OpenCode session ID to continue." },
         title: { type: "string", default: "Codex bridge" },
-        wait: { type: "boolean", default: false, description: "Wait for completion before returning." },
+        wait: { type: "boolean", default: false, description: "Wait for completion before returning. Keep false for long tasks because MCP clients may impose a shorter transport timeout." },
         noReply: {
           type: "boolean",
           default: false,
@@ -148,7 +148,7 @@ export const coreTools = [
   },
   {
     name: "opencode_permission_list",
-    description: "List permission requests detected in tracked tasks or a session message history.",
+    description: "List pending permissions from OpenCode and blocked tool calls for tracked tasks.",
     inputSchema: {
       type: "object",
       properties: {
@@ -164,17 +164,17 @@ export const coreTools = [
     inputSchema: {
       type: "object",
       properties: {
-        sessionID: { type: "string" },
+        sessionID: { type: "string", description: "Optional session ID used to refresh the matching tracked task." },
         taskID: { type: "string" },
         permissionID: { type: "string", description: "OpenCode permission request ID." },
         requestID: { type: "string", description: "Deprecated alias for permissionID." },
         decision: { type: "string", enum: ["allow", "deny"], description: "allow maps to once/always; deny maps to reject." },
         response: { type: "string", enum: ["once", "always", "reject"], description: "Native OpenCode permission response." },
         remember: { type: "boolean", default: false, description: "When decision is allow, remember maps to the native always response." },
+        message: { type: "string", description: "Optional message included with the native OpenCode permission reply." },
         workspace: { type: "string", description: "Workspace directory for the session." },
         timeoutMs: { type: "number", default: 30000 },
       },
-      required: ["sessionID"],
     },
   },
 ];

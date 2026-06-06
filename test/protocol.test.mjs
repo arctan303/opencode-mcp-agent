@@ -25,7 +25,7 @@ function request(payloads) {
       if (lines.length >= payloads.length) {
         clearTimeout(timer);
         child.kill();
-        resolve(lines.map((line) => JSON.parse(line)));
+        resolve(lines.map((line) => JSON.parse(line)).sort((a, b) => a.id - b.id));
       }
     });
     child.stderr.on("data", (chunk) => {
