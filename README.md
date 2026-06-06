@@ -19,7 +19,7 @@ The core workflow is functional and covered by automated and real-runtime tests:
 - Fast two-phase cancellation
 - Model and session discovery
 
-This is an early public release. OpenCode API compatibility may require updates when OpenCode changes its server endpoints.
+Version 1.0 provides the first stable task-oriented MCP interface. OpenCode API compatibility may still require updates when OpenCode changes its server endpoints.
 
 ## How It Works
 

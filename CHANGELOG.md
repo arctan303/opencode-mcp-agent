@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.0 - 2026-06-06
+
+- Declared the task-oriented MCP interface stable for the first public release.
+- Added a reproducible npm tarball build with SHA-256 and machine-readable manifest output.
+- Verified tarball installation, both CLI aliases, MCP initialization, and all 13 core tools.
+- Reported the package version dynamically through MCP `serverInfo`.
+- Added Windows and Linux CI coverage across Node.js 18, 20, and 22.
+- Fixed the Windows Node.js 18 test entry point.
+
 ## 0.2.0 - 2026-06-06
 
 - Renamed the public project to OpenCode MCP Agent.

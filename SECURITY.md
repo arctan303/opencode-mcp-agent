@@ -2,7 +2,7 @@
 
 ## Supported Version
 
-Security fixes are applied to the latest revision on the default branch while the project is in early development.
+Security fixes are applied to the latest stable release and the latest revision on the default branch.
 
 ## Reporting a Vulnerability
 
