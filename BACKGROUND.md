@@ -101,6 +101,6 @@ Codex OpenCode Bridge
 3. 通过 OpenCode API 创建或复用 session。
 4. 向 OpenCode 发送任务。
 5. 返回任务状态和结果。
-6. 后续补权限转发和持久化状态。
+6. 转发权限请求并持久化任务状态。
 
 Desktop 相关能力不进入第一阶段主线。

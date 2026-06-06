@@ -12,14 +12,14 @@
 - [x] 通过 runtime API 列出可用模型：`opencode_model_list`
 - [x] managed runtime：随机端口、随机 BasicAuth、认证只存在进程内
 - [x] runtime 幂等启动：重复 `opencode_runtime_start` 默认复用健康 runtime
-- [x] runtime 健康检查：复用前探测 `/session`，异常时丢弃并重启
+- [x] runtime 健康检查：复用前探测 `/global/health`，异常时丢弃并重启
 - [x] Windows OpenCode 解析：优先 `OPENCODE_BIN` / npm global exe，再 fallback 到 PATH 和 Desktop bundled
 - [x] `opencode_task_start` 使用 managed runtime
 - [x] `opencode_task_list`
 - [x] `opencode_task_status`
 - [x] `opencode_task_status` 同步 session 紧凑进度
 - [x] `opencode_task_result`
-- [x] `opencode_task_cancel`：当前进程内活跃请求可 abort；跨进程恢复任务会明确返回无法保证已停止
+- [x] `opencode_task_cancel`：立即记录取消请求，后台调用 session abort 并确认最终状态
 - [x] task 状态持久化到本机 JSON state file
 - [x] `opencode_session_list`
 - [x] `opencode_session_messages`
@@ -57,7 +57,7 @@
 - [ ] 增加 runtime crash 后的任务恢复提示：通过 `sessionID` 拉取历史并更新 task
 - [ ] 增加更多 mock OpenCode server 测试，覆盖 runtime 重启、HTTP 失败、取消、权限扫描
 - [ ] 增加权限策略配置，在明确授权范围内支持受控自动批准
-- [ ] 清理或压缩 `dev/` 中无效探测产物
+- [x] 清理早期 Desktop 私有接口探测脚本和无效产物
 
 ## 非主线 / 暂缓
 

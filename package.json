@@ -1,13 +1,42 @@
 {
   "name": "codex-opencode-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "type": "module",
-  "description": "Expose OpenCode as a managed MCP sub-agent runtime.",
+  "description": "Use OpenCode as a managed MCP sub-agent runtime.",
+  "author": "arctan303",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "opencode",
+    "sub-agent",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arctan303/Codex-OpenCode-Bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arctan303/Codex-OpenCode-Bridge/issues"
+  },
+  "homepage": "https://github.com/arctan303/Codex-OpenCode-Bridge#readme",
+  "files": [
+    "server.mjs",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "BACKGROUND.md",
+    "ARCHITECTURE.md",
+    "ROADMAP.md"
+  ],
   "bin": {
     "codex-opencode-bridge": "./server.mjs"
   },
   "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.mjs",
     "check": "node --check server.mjs && node --check src/config.mjs && node --check src/constants.mjs && node --check src/handlers.mjs && node --check src/index.mjs && node --check src/messages.mjs && node --check src/process.mjs && node --check src/sidecar.mjs && node --check src/state.mjs && node --check src/tools.mjs && node --test test/*.mjs"
   },
   "engines": {

@@ -76,16 +76,6 @@ export const OPENCODE_SOURCE =
         ? "desktop-bundled"
         : "path";
 
-export const OPENCODE_DESKTOP =
-  process.env.OPENCODE_DESKTOP_BIN ||
-  path.join(
-    homedir(),
-    "AppData",
-    "Local",
-    "OpenCode",
-    "OpenCode.exe",
-  );
-
 export const CONFIG =
   process.env.OPENCODE_CONFIG ||
   path.join(homedir(), ".config", "opencode", "opencode.json");

@@ -1,4 +1,6 @@
 node_modules/
+coverage/
+.nyc_output/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -12,3 +14,6 @@ pnpm-debug.log*
 *.log
 opencode.json
 opencode.*.json
+
+.test-tasks.json
+*.tmp

@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## 0.2.0 - 2026-06-06
+
+- Reworked the project around a managed headless OpenCode runtime.
+- Added asynchronous task tracking and persistent task records.
+- Added model, session, runtime, permission, status, result, and cancellation tools.
+- Added real OpenCode permission discovery and `once`, `always`, and `reject` replies.
+- Added running, queued, and blocked tool diagnostics.
+- Added structured OpenCode request timeout errors.
+- Added fast two-phase task cancellation.
+- Added concurrent MCP request handling.
+- Removed historical OpenCode Desktop private-interface probes.
+- Added public repository documentation and CI.
+
+## 0.1.0 - 2026-06-05
+
+- Initial bridge prototype.
