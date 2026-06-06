@@ -1,5 +1,5 @@
 {
-  "name": "codex-opencode-bridge",
+  "name": "opencode-mcp-agent",
   "version": "0.2.0",
   "private": false,
   "type": "module",
@@ -14,12 +14,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arctan303/Codex-OpenCode-Bridge.git"
+    "url": "git+https://github.com/arctan303/opencode-mcp-agent.git"
   },
   "bugs": {
-    "url": "https://github.com/arctan303/Codex-OpenCode-Bridge/issues"
+    "url": "https://github.com/arctan303/opencode-mcp-agent/issues"
   },
-  "homepage": "https://github.com/arctan303/Codex-OpenCode-Bridge#readme",
+  "homepage": "https://github.com/arctan303/opencode-mcp-agent#readme",
   "files": [
     "server.mjs",
     "src/",
@@ -32,6 +32,7 @@
     "ROADMAP.md"
   ],
   "bin": {
+    "opencode-mcp-agent": "./server.mjs",
     "codex-opencode-bridge": "./server.mjs"
   },
   "scripts": {

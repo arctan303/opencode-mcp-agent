@@ -1,10 +1,10 @@
-# Codex OpenCode Bridge
+# OpenCode MCP Agent
 
 Use OpenCode as a managed MCP sub-agent.
 
-Codex OpenCode Bridge starts a private local `opencode serve` runtime and exposes task-oriented MCP tools for sending work, selecting a workspace and model, continuing sessions, observing progress, handling permissions, cancelling work, and collecting results.
+OpenCode MCP Agent starts a private local `opencode serve` runtime and exposes task-oriented MCP tools for sending work, selecting a workspace and model, continuing sessions, observing progress, handling permissions, cancelling work, and collecting results.
 
-The MCP server is client-agnostic. Despite the project name, it can be used by Codex and other clients that support stdio MCP servers.
+The MCP server is client-agnostic and can be used by Codex and other clients that support stdio MCP servers.
 
 ## Status
 
@@ -25,7 +25,7 @@ This is an early public release. OpenCode API compatibility may require updates 
 
 ```text
 MCP client
-  -> Codex OpenCode Bridge
+  -> OpenCode MCP Agent
     -> managed opencode serve
       -> OpenCode agent, session, model and tools
 ```
@@ -53,15 +53,15 @@ If OpenCode is not on `PATH`, set `OPENCODE_BIN` to its executable path.
 Clone the repository and run the checks:
 
 ```powershell
-git clone https://github.com/arctan303/Codex-OpenCode-Bridge.git
-cd Codex-OpenCode-Bridge
+git clone https://github.com/arctan303/opencode-mcp-agent.git
+cd opencode-mcp-agent
 npm run check
 ```
 
 Register it with Codex:
 
 ```powershell
-codex mcp add opencode-control -- node C:\path\to\Codex-OpenCode-Bridge\server.mjs
+codex mcp add opencode-control -- node C:\path\to\opencode-mcp-agent\server.mjs
 ```
 
 Generic stdio MCP configuration:
@@ -71,7 +71,7 @@ Generic stdio MCP configuration:
   "mcpServers": {
     "opencode-control": {
       "command": "node",
-      "args": ["/absolute/path/to/Codex-OpenCode-Bridge/server.mjs"]
+      "args": ["/absolute/path/to/opencode-mcp-agent/server.mjs"]
     }
   }
 }

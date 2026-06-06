@@ -1,12 +1,12 @@
 # 架构设计
 
-本文档定义 Codex OpenCode Bridge 的目标架构。核心原则：OpenCode 是一个受管子代理 runtime，不是桌面端窗口，也不是简单 CLI wrapper。
+本文档定义 OpenCode MCP Agent 的目标架构。核心原则：OpenCode 是一个受管子代理 runtime，不是桌面端窗口，也不是简单 CLI wrapper。
 
 ## 总体架构
 
 ```text
 MCP Client
-  -> Codex OpenCode Bridge MCP Server
+  -> OpenCode MCP Agent Server
     -> Task Manager
       -> Managed OpenCode Runtime
         -> opencode serve

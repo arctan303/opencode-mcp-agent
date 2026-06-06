@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## 0.2.0 - 2026-06-06
 
+- Renamed the public project to OpenCode MCP Agent.
 - Reworked the project around a managed headless OpenCode runtime.
 - Added asynchronous task tracking and persistent task records.
 - Added model, session, runtime, permission, status, result, and cancellation tools.
