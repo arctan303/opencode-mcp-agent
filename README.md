@@ -153,6 +153,14 @@ npm run check
 
 The check command runs syntax validation and the Node.js test suite.
 
+Build the npm release artifact:
+
+```powershell
+npm run build
+```
+
+The build runs all checks and writes the package tarball, `SHA256SUMS`, and `manifest.json` to `dist/`. The output directory is intentionally not committed; its files are suitable for an npm publish workflow or a GitHub Release.
+
 Project documentation:
 
 - [BACKGROUND.md](BACKGROUND.md)

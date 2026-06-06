@@ -43,6 +43,7 @@ test("MCP initialize and tools/list work over stdio", async () => {
   ]);
 
   assert.equal(responses[0].result.serverInfo.name, "opencode-control");
+  assert.equal(responses[0].result.serverInfo.version, "0.2.0");
   assert.ok(responses[1].result.tools.some((tool) => tool.name === "opencode_task_start"));
   assert.equal(responses[1].result.tools.some((tool) => tool.name === "opencode_run"), false);
 });

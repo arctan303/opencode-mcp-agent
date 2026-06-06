@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
 import { tools } from "./tools.mjs";
 import { callTool } from "./handlers.mjs";
+
+const packageMetadata = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+);
 
 function send(payload) {
   process.stdout.write(JSON.stringify(payload) + "\n");
@@ -13,7 +18,10 @@ async function handleRequest(request) {
       result: {
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "opencode-control", version: "0.1.0" },
+        serverInfo: {
+          name: "opencode-control",
+          version: packageMetadata.version,
+        },
       },
     };
   }
