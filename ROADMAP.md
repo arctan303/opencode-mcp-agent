@@ -43,7 +43,10 @@
 - [x] 接入真实权限回复 endpoint
 - [x] 暴露 `opencode_permission_reply`
 - [x] 暴露运行中和阻塞中的工具名称、call ID、输入摘要与持续时间
+- [x] 区分 queued 与 executing 工具，避免把参数流式生成阶段误报为运行中
 - [x] 真实 `edit: ask` 回归测试：发现权限、回复 `once`、任务继续并完成
+- [x] 修正 `always` 权限回复的 remember 返回语义
+- [x] 取消请求立即返回，session abort 在后台确认
 
 当前策略：`decision: "allow"` 默认回复 `once`；传 `remember: true` 时回复 `always`；`decision: "deny"` 回复 `reject`。权限请求以 OpenCode 权限队列为准，不再从消息 part 猜测。
 

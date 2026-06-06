@@ -51,6 +51,9 @@ function taskSummary(taskRecord) {
     error: taskRecord.error,
     errorCode: taskRecord.errorCode,
     timeoutMs: taskRecord.timeoutMs,
+    cancelRequestedAt: taskRecord.cancelRequestedAt,
+    cancelledAt: taskRecord.cancelledAt,
+    sessionAbort: taskRecord.sessionAbort,
     updatedAt: taskRecord.updatedAt,
   };
 }
@@ -115,16 +118,46 @@ function permissionsForSession(permissions, sessionID) {
 }
 
 function enrichBlockedTools(progress, permissions, sessionStatus) {
-  const runningTools = progress.runningTools || [];
+  const activeTools = [
+    ...(progress.queuedTools || []),
+    ...(progress.runningTools || []),
+  ];
   const permissionCallIDs = new Set(
     permissions.map((request) => request?.tool?.callID).filter(Boolean),
   );
-  progress.blockedToolCalls = runningTools
+  progress.blockedToolCalls = activeTools
     .filter((tool) => permissionCallIDs.has(tool.callID) || sessionStatus?.type !== "busy")
     .map((tool) => ({
       ...tool,
       reason: permissionCallIDs.has(tool.callID) ? "waiting_permission" : "session_not_busy",
     }));
+}
+
+async function confirmSessionAbort(taskRecord, timeoutMs) {
+  try {
+    const result = await abortSession(taskRecord, timeoutMs);
+    taskRecord.sessionAbort = result;
+    taskRecord.sessionAbortConfirmedAt = new Date().toISOString();
+    if (result === true && !TERMINAL_STATUSES.has(taskRecord.status)) {
+      taskRecord.status = "cancelled";
+      taskRecord.cancelledAt = new Date().toISOString();
+    }
+  } catch (error) {
+    taskRecord.sessionAbort = { ok: false, error: error.message };
+    taskRecord.sessionAbortConfirmedAt = new Date().toISOString();
+  }
+  saveTask(taskRecord);
+}
+
+export function resolvePermissionResponse(input = {}) {
+  const decision = input.decision || input.response;
+  if (!decision) throw new Error("opencode_permission_reply requires decision or response.");
+  const response = input.response ||
+    (decision === "allow" ? (input.remember ? "always" : "once") : "reject");
+  if (!["once", "always", "reject"].includes(response)) {
+    throw new Error(`Unsupported permission response: ${response}`);
+  }
+  return response;
 }
 
 async function syncTaskProgress(taskRecord, options = {}) {
@@ -148,7 +181,17 @@ async function syncTaskProgress(taskRecord, options = {}) {
     enrichBlockedTools(progress, permissions, sessionStatus);
     taskRecord.progress = progress;
     taskRecord.permissionRequests = permissions;
-    if (ACTIVE_STATUSES.has(taskRecord.status) && permissions.length) {
+    if (
+      taskRecord.status === "cancel_requested" &&
+      sessionStatus.type === "idle" &&
+      !progress.hasOpenAssistantMessage &&
+      progress.runningTools.length === 0
+    ) {
+      taskRecord.status = "cancelled";
+      taskRecord.cancelledAt = taskRecord.cancelledAt || new Date().toISOString();
+    } else if (taskRecord.status === "cancel_requested") {
+      // Preserve cancellation intent while OpenCode still reports work in progress.
+    } else if (ACTIVE_STATUSES.has(taskRecord.status) && permissions.length) {
       taskRecord.status = "waiting_permission";
     } else if (
       ACTIVE_STATUSES.has(taskRecord.status) &&
@@ -266,6 +309,11 @@ export async function callTool(name, input = {}) {
       saveTask(taskRecord);
       return taskRecord;
     }).catch(async (err) => {
+      if (taskRecord.status === "cancel_requested") {
+        taskRecord.error = null;
+        saveTask(taskRecord);
+        return taskRecord;
+      }
       if (taskRecord.status === "cancelled" || controller.signal.aborted) {
         taskRecord.status = "cancelled";
         taskRecord.error = null;
@@ -330,34 +378,28 @@ export async function callTool(name, input = {}) {
   if (name === "opencode_task_cancel") {
     const taskRecord = tasks.get(input.taskID);
     if (!taskRecord) throw new Error(`Task not found: ${input.taskID}`);
-    const active = activeRequests.get(input.taskID);
-    let sessionAbort = null;
-    if (taskRecord.sessionID) {
-      try {
-        sessionAbort = await abortSession(taskRecord, input.timeoutMs || 30000);
-      } catch (error) {
-        sessionAbort = { ok: false, error: error.message };
-      }
-    }
-    if (active) {
-      taskRecord.status = "cancelled";
-      taskRecord.cancelledAt = new Date().toISOString();
-      taskRecord.sessionAbort = sessionAbort;
-      active.abort();
-      saveTask(taskRecord);
-      return text(JSON.stringify({ cancelled: true, task: taskSummary(taskRecord) }, null, 2));
-    }
     if (TERMINAL_STATUSES.has(taskRecord.status)) {
-      return text(JSON.stringify({ cancelled: false, reason: "task_not_running", sessionAbort, task: taskSummary(taskRecord) }, null, 2));
+      return text(JSON.stringify({
+        cancelled: false,
+        cancelRequested: false,
+        reason: "task_not_running",
+        task: taskSummary(taskRecord),
+      }, null, 2));
     }
-    taskRecord.status = sessionAbort === true ? "cancelled" : "cancel_requested";
+    const active = activeRequests.get(input.taskID);
+    taskRecord.status = "cancel_requested";
     taskRecord.cancelRequestedAt = new Date().toISOString();
-    taskRecord.sessionAbort = sessionAbort;
-    taskRecord.cancelNote = sessionAbort === true
-      ? "OpenCode session abort endpoint returned true."
-      : "The task is not active in this bridge process; OpenCode may still be running in its session.";
+    taskRecord.cancelNote = "Cancellation accepted. OpenCode session abort confirmation is running in the background.";
     saveTask(taskRecord);
-    return text(JSON.stringify({ cancelled: sessionAbort === true, reason: "active_request_not_found", sessionAbort, task: taskSummary(taskRecord) }, null, 2));
+    if (active) active.abort();
+    if (taskRecord.sessionID) {
+      void confirmSessionAbort(taskRecord, input.timeoutMs || 30000);
+    }
+    return text(JSON.stringify({
+      cancelled: false,
+      cancelRequested: true,
+      task: taskSummary(taskRecord),
+    }, null, 2));
   }
 
   if (name === "opencode_runtime_status") {
@@ -473,13 +515,7 @@ export async function callTool(name, input = {}) {
     const workspace = input.workspace || process.cwd();
     const permissionID = input.permissionID || input.requestID;
     if (!permissionID) throw new Error("opencode_permission_reply requires permissionID or requestID.");
-    const decision = input.decision || input.response;
-    if (!decision) throw new Error("opencode_permission_reply requires decision or response.");
-    const response = input.response ||
-      (decision === "allow" ? (input.remember ? "always" : "once") : "reject");
-    if (!["once", "always", "reject"].includes(response)) {
-      throw new Error(`Unsupported permission response: ${response}`);
-    }
+    const response = resolvePermissionResponse(input);
     const params = new URLSearchParams();
     params.set("directory", workspace);
     const sidecar = await getManagedRuntime({ cwd: workspace, timeoutMs: input.timeoutMs || 30000 });
@@ -501,7 +537,8 @@ export async function callTool(name, input = {}) {
       sessionID: input.sessionID || taskRecord?.sessionID,
       permissionID,
       response,
-      remember: Boolean(input.remember),
+      remember: response === "always",
+      rememberRequested: Boolean(input.remember),
       result,
     }, null, 2));
   }

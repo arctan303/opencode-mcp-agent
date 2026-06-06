@@ -95,3 +95,22 @@ test("deriveProgress exposes running tool details", () => {
   assert.match(progress.runningTools[0].inputSummary, /C:\/repo\/app\.js/);
   assert.ok(progress.runningTools[0].durationMs >= 2000);
 });
+
+test("deriveProgress separates queued tools with incomplete arguments", () => {
+  const messages = [{
+    info: { id: "msg_pending", role: "assistant" },
+    parts: [{
+      type: "tool",
+      tool: "write",
+      callID: "call_pending",
+      state: { status: "pending", input: {} },
+    }],
+  }];
+
+  const progress = deriveProgress(messages);
+  assert.equal(progress.toolCalls.pending, 1);
+  assert.equal(progress.toolCalls.running, 0);
+  assert.equal(progress.runningTools.length, 0);
+  assert.equal(progress.queuedTools[0].phase, "queued");
+  assert.equal(progress.queuedTools[0].inputSummary, null);
+});

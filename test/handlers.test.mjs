@@ -16,3 +16,11 @@ test("opencode_task_start requires explicit workspace", async () => {
 
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("permission response reports effective remember semantics", async () => {
+  const { resolvePermissionResponse } = await import("../src/handlers.mjs");
+  assert.equal(resolvePermissionResponse({ response: "always" }), "always");
+  assert.equal(resolvePermissionResponse({ decision: "allow", remember: true }), "always");
+  assert.equal(resolvePermissionResponse({ decision: "allow" }), "once");
+  assert.equal(resolvePermissionResponse({ decision: "deny" }), "reject");
+});

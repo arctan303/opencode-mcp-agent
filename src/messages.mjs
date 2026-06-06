@@ -24,7 +24,25 @@ export function collectTextParts(parts) {
 
 function summarizeToolInput(input, maxLength = 300) {
   if (!input || typeof input !== "object") return input ?? null;
+  if (Object.keys(input).length === 0) return null;
   return truncateText(JSON.stringify(input), maxLength);
+}
+
+function toolProgress(part, message, phase) {
+  const startedAtMs = part.time?.start || part.state?.time?.start || null;
+  return {
+    tool: part.tool,
+    callID: part.callID,
+    messageID: part.messageID || message?.info?.id,
+    status: part.state?.status || "pending",
+    phase,
+    title: part.state?.title || null,
+    inputSummary: summarizeToolInput(part.state?.input),
+    startedAt: isoFromMs(startedAtMs),
+    durationMs: typeof startedAtMs === "number"
+      ? Math.max(0, Date.now() - startedAtMs)
+      : null,
+  };
 }
 
 export function compactMessage(message, options = {}) {
@@ -70,7 +88,8 @@ export function deriveProgress(messages) {
   const list = Array.isArray(messages) ? messages : [];
   const progress = {
     messageCount: list.length,
-    toolCalls: { total: 0, completed: 0, running: 0, failed: 0 },
+    toolCalls: { total: 0, pending: 0, completed: 0, running: 0, failed: 0 },
+    queuedTools: [],
     runningTools: [],
     blockedToolCalls: [],
     filesRead: [],
@@ -115,21 +134,13 @@ export function deriveProgress(messages) {
         const status = part.state?.status;
         if (status === "completed") progress.toolCalls.completed += 1;
         else if (status === "failed" || status === "error") progress.toolCalls.failed += 1;
+        else if (!status || status === "pending") {
+          progress.toolCalls.pending += 1;
+          progress.queuedTools.push(toolProgress(part, message, "queued"));
+        }
         else {
           progress.toolCalls.running += 1;
-          const startedAtMs = part.time?.start || part.state?.time?.start || null;
-          progress.runningTools.push({
-            tool: part.tool,
-            callID: part.callID,
-            messageID: part.messageID || message?.info?.id,
-            status: status || "running",
-            title: part.state?.title || null,
-            inputSummary: summarizeToolInput(part.state?.input),
-            startedAt: isoFromMs(startedAtMs),
-            durationMs: typeof startedAtMs === "number"
-              ? Math.max(0, Date.now() - startedAtMs)
-              : null,
-          });
+          progress.runningTools.push(toolProgress(part, message, "executing"));
         }
         const filePath = part.state?.input?.filePath;
         if (part.tool === "read" && filePath && !progress.filesRead.includes(filePath)) {

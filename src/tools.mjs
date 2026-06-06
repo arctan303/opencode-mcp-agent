@@ -21,7 +21,11 @@ export const coreTools = [
           default: false,
           description: "Only record the user message without asking the model to answer.",
         },
-        timeoutMs: { type: "number", default: 600000 },
+        timeoutMs: {
+          type: "number",
+          default: 600000,
+          description: "Maximum lifetime of the OpenCode model/tool request in milliseconds, independent of MCP transport timeout. It still applies when wait=false; use a sufficiently large value for long tasks.",
+        },
         message: { type: "string", description: "Deprecated alias for prompt." },
         cwd: { type: "string", description: "Deprecated alias for workspace." },
         session: { type: "string", description: "Deprecated alias for sessionID." },
@@ -70,7 +74,7 @@ export const coreTools = [
   },
   {
     name: "opencode_task_cancel",
-    description: "Cancel an active OpenCode task started by this bridge process.",
+    description: "Request cancellation immediately; OpenCode session abort confirmation continues in the background.",
     inputSchema: {
       type: "object",
       properties: {
