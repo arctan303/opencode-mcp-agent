@@ -27,9 +27,7 @@
     "LICENSE",
     "CHANGELOG.md",
     "SECURITY.md",
-    "BACKGROUND.md",
-    "ARCHITECTURE.md",
-    "ROADMAP.md"
+    "docs/"
   ],
   "bin": {
     "opencode-mcp-agent": "./server.mjs"

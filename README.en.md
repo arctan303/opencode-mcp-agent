@@ -190,9 +190,9 @@ The build runs all checks and writes the package tarball, `SHA256SUMS`, and `man
 
 Project documentation:
 
-- [BACKGROUND.md](BACKGROUND.md)
-- [ARCHITECTURE.md](ARCHITECTURE.md)
-- [ROADMAP.md](ROADMAP.md)
+- [BACKGROUND.md](docs/BACKGROUND.md)
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [ROADMAP.md](docs/ROADMAP.md)
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 - [CHANGELOG.md](CHANGELOG.md)
 

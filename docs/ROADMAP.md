@@ -1,6 +1,6 @@
 # Roadmap
 
-See `ARCHITECTURE.md` for architectural principles. The current direction is a managed headless OpenCode runtime — the OpenCode Desktop bridge is no longer the primary path.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for architectural principles. The current direction is a managed headless OpenCode runtime — the OpenCode Desktop bridge is no longer the primary path.
 
 ## Completed
 
@@ -71,7 +71,7 @@ These capabilities are not part of the first phase. The first phase focuses on m
 
 # 功能进度 (中文版)
 
-架构原则见 `ARCHITECTURE.md`。当前方向是 managed headless OpenCode runtime，不再以 OpenCode Desktop bridge 为主线。
+架构原则见 [ARCHITECTURE.md](ARCHITECTURE.md)。当前方向是 managed headless OpenCode runtime，不再以 OpenCode Desktop bridge 为主线。
 
 ## 已完成
 

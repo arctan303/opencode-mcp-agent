@@ -190,9 +190,9 @@ npm run build
 
 项目文档：
 
-- [项目背景 / BACKGROUND.md](BACKGROUND.md)
-- [架构设计 / ARCHITECTURE.md](ARCHITECTURE.md)
-- [功能进度 / ROADMAP.md](ROADMAP.md)
+- [项目背景 / BACKGROUND.md](docs/BACKGROUND.md)
+- [架构设计 / ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [功能进度 / ROADMAP.md](docs/ROADMAP.md)
 - [贡献指南 / CONTRIBUTING.md](CONTRIBUTING.md)
 - [更新日志 / CHANGELOG.md](CHANGELOG.md)
 
