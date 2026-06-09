@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const packageJson = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
 
 function request(payloads) {
   return new Promise((resolve, reject) => {
@@ -43,7 +45,8 @@ test("MCP initialize and tools/list work over stdio", async () => {
   ]);
 
   assert.equal(responses[0].result.serverInfo.name, "opencode-control");
-  assert.equal(responses[0].result.serverInfo.version, "1.0.0");
+  assert.equal(responses[0].result.serverInfo.version, packageJson.version);
   assert.ok(responses[1].result.tools.some((tool) => tool.name === "opencode_task_start"));
   assert.equal(responses[1].result.tools.some((tool) => tool.name === "opencode_run"), false);
 });
+
