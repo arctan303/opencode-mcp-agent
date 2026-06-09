@@ -1,4 +1,113 @@
-# 项目背景
+# Project Background
+
+The core goal of OpenCode MCP Agent is to turn OpenCode into a sub-agent that any MCP client can invoke.
+
+It is not a desktop controller, nor is it meant for users to watch OpenCode Desktop in real time. Instead, it provides a managed OpenCode runtime that lets any MCP client dispatch tasks to OpenCode and retrieve task status, permission requests, and final results.
+
+## Core Goal
+
+Enable MCP clients to call OpenCode as if it were a sub-agent:
+
+```text
+MCP Client
+  -> OpenCode MCP Agent
+    -> Managed OpenCode Runtime
+      -> OpenCode session / model / workspace / tools
+```
+
+What upstream clients need is not "control over a window" but an observable, reusable, and authorizable task execution unit:
+
+- Dispatch tasks to OpenCode.
+- Specify the task workspace.
+- Specify the model OpenCode should use.
+- Continue an existing session or create a new one.
+- Retrieve the OpenCode agent's response.
+- Get the task status: running, completed, failed, or waiting for permission.
+- When OpenCode requests authorization, the MCP client can approve or deny on behalf of the user.
+
+## Why Desktop Should Not Be the Core
+
+The value of the OpenCode Desktop bridge is mainly:
+
+- Users can see the desktop session.
+- Users can continue the conversation later in the desktop app.
+
+However, when OpenCode is used as a sub-agent, neither of these is a core concern. Users typically do not watch sub-agent output in real time; upstream MCP clients primarily need status, results, errors, and permission requests.
+
+Making Desktop the core introduces additional complexity:
+
+- Depends on whether Desktop is running.
+- Requires discovering the Desktop sidecar port.
+- Requires reading the Desktop sidecar's local authentication environment variables.
+- Easily devolves into probing private interfaces rather than stably controlling the OpenCode runtime.
+- Desktop UI state synchronization interferes with what should be independent sub-agent execution.
+
+Therefore, Desktop is not part of this project's core path.
+
+## The New Core Path
+
+This project should start and manage its own OpenCode runtime:
+
+```text
+OpenCode MCP Agent
+  -> spawn opencode serve
+  -> random local port
+  -> random local BasicAuth
+  -> OpenCode API
+```
+
+The bridge is responsible for starting, maintaining, and calling this runtime. MCP clients interact only with the task interface — they never need to know about ports, credentials, processes, or API details.
+
+## Not Just for One Client
+
+The project was originally validated in the Codex scenario — dispatching tasks from Codex to OpenCode — and has since been renamed to OpenCode MCP Agent.
+
+At the protocol level it is designed to be client-agnostic:
+
+- Codex can use it.
+- Claude Desktop can use it.
+- OpenCode itself can use it as an MCP server.
+- Any custom MCP client can use it.
+
+Therefore, tool naming and return structures are designed around MCP and the OpenCode sub-agent concept, not around any specific client.
+
+## Design Principles
+
+- **Sub-agent semantics first**: Expose tasks, status, and results — not low-level CLI/HTTP wrappers.
+- **Headless runtime first**: Start a managed OpenCode runtime by default; do not depend on Desktop.
+- **Explicit workspaces**: Every task must specify a workspace, or use an explicitly configured default.
+- **Reusable sessions**: Support `sessionID` so OpenCode can retain context.
+- **Configurable models**: Allow specifying a model per task.
+- **Observable state**: Tasks must return status, sessionID, messageID, result, and error.
+- **Permission forwarding**: When OpenCode requests permission, the MCP client should be able to see and act on it with allow/deny.
+- **Credentials never written to disk**: Runtime local credentials are generated and held in process memory only — never written to the repository or logs.
+- **Respect OpenCode's security boundaries**: The bridge dispatches on behalf of the user but does not bypass OpenCode's permission system.
+
+## Non-Goals
+
+- Do not control OpenCode Desktop as a core feature.
+- Do not rely on screen reading or coordinate clicking.
+- Do not probe desktop private interfaces as the primary path.
+- Do not build a model provider management platform.
+- Do not persist user OpenCode keys or config files.
+- Do not bypass OpenCode's tool permission confirmations.
+
+## Phase One Assessment
+
+Phase one should focus on the managed headless runtime:
+
+1. Start a managed `opencode serve` instance.
+2. Use a random port and random BasicAuth.
+3. Create or reuse a session via the OpenCode API.
+4. Send tasks to OpenCode.
+5. Return task status and results.
+6. Forward permission requests and persist task state.
+
+Desktop-related capabilities are excluded from the phase one main path.
+
+---
+
+# 项目背景 (中文版)
 
 OpenCode MCP Agent 的核心目标，是把 OpenCode 变成一个可被 MCP 客户端调用的子代理。
 
@@ -15,7 +124,7 @@ MCP Client
       -> OpenCode session / model / workspace / tools
 ```
 
-上游客户端需要的不是“控制一个窗口”，而是一个可观察、可复用、可授权的任务执行单元：
+上游客户端需要的不是"控制一个窗口"，而是一个可观察、可复用、可授权的任务执行单元：
 
 - 派发任务给 OpenCode。
 - 指定任务工作空间。
@@ -58,9 +167,9 @@ OpenCode MCP Agent
 
 桥接器负责启动、维护和调用这个 runtime。MCP 客户端只面对任务接口，不需要知道端口、认证、进程和 API 细节。
 
-## 不只面向 Codex
+## 不只面向单一客户端
 
-项目名保留 Codex，是因为最初验证来自 Codex 场景：让 Codex 把任务派给 OpenCode。
+项目最初在 Codex 场景中验证，现已更名为 OpenCode MCP Agent。
 
 协议层面它应保持通用：
 

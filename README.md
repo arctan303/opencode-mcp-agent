@@ -1,5 +1,10 @@
 # OpenCode MCP Agent
 
+[![CI](https://github.com/arctan303/opencode-mcp-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/arctan303/opencode-mcp-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
+[![npm version](https://img.shields.io/npm/v/opencode-mcp-agent.svg)](https://www.npmjs.com/package/opencode-mcp-agent)
+
 Use OpenCode as a managed MCP sub-agent.
 
 OpenCode MCP Agent starts a private local `opencode serve` runtime and exposes task-oriented MCP tools for sending work, selecting a workspace and model, continuing sessions, observing progress, handling permissions, cancelling work, and collecting results.
@@ -49,6 +54,26 @@ opencode --version
 If OpenCode is not on `PATH`, set `OPENCODE_BIN` to its executable path.
 
 ## Quick Start
+
+### Install from npm
+
+```bash
+npm install -g opencode-mcp-agent
+```
+
+Then register with your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "opencode-control": {
+      "command": "opencode-mcp-agent"
+    }
+  }
+}
+```
+
+### Install from source
 
 Clone the repository and run the checks:
 

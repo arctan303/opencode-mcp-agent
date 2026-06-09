@@ -10,6 +10,8 @@ Do not open a public issue for vulnerabilities involving credential exposure, au
 
 Report the issue privately through GitHub Security Advisories for the repository. Include reproduction steps, affected versions or commits, impact, and any suggested mitigation.
 
+The maintainers aim to acknowledge reports within 72 hours and provide an initial assessment within one week.
+
 Do not include real model-provider credentials, OpenCode configuration files, runtime Basic Authentication values, or private workspace contents.
 
 ## Security Boundaries

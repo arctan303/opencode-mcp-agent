@@ -32,8 +32,7 @@
     "ROADMAP.md"
   ],
   "bin": {
-    "opencode-mcp-agent": "./server.mjs",
-    "codex-opencode-bridge": "./server.mjs"
+    "opencode-mcp-agent": "./server.mjs"
   },
   "scripts": {
     "start": "node server.mjs",

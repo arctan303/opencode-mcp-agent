@@ -1,5 +1,7 @@
 # Contributing
 
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+
 Contributions are welcome through focused issues and pull requests.
 
 ## Development Setup
@@ -24,6 +26,12 @@ The automated test suite must not require model-provider credentials or a runnin
 - Do not commit OpenCode configuration, provider credentials, runtime state, generated probe output, or personal filesystem paths.
 - Preserve the task-oriented MCP interface unless a breaking change is explicitly discussed.
 - Update README, architecture, or roadmap documentation when behavior changes.
+
+### Commit Messages
+
+- Use clear, descriptive commit messages.
+- Reference related issues when applicable (e.g., `Fixes #12`).
+- Keep individual commits focused on a single change.
 
 ## Design Constraints
 

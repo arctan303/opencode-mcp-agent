@@ -1,4 +1,75 @@
-# 功能进度
+# Roadmap
+
+See `ARCHITECTURE.md` for architectural principles. The current direction is a managed headless OpenCode runtime — the OpenCode Desktop bridge is no longer the primary path.
+
+## Completed
+
+- [x] MCP stdio server base entry point
+- [x] MCP JSON-RPC concurrency — status queries and permission replies remain available while long tasks are in progress
+- [x] OpenCode API call verification
+- [x] Session creation and reuse verification
+- [x] Sending messages and reading OpenCode agent replies verification
+- [x] List available models via the runtime API: `opencode_model_list`
+- [x] Managed runtime: random port, random BasicAuth, credentials kept in process memory only
+- [x] Idempotent runtime startup: repeated `opencode_runtime_start` calls reuse a healthy runtime by default
+- [x] Runtime health check: probe `/global/health` before reuse; discard and restart on failure
+- [x] Windows OpenCode resolution: prefer `OPENCODE_BIN` / npm global exe, then fall back to PATH and Desktop-bundled binary
+- [x] `opencode_task_start` uses managed runtime
+- [x] `opencode_task_list`
+- [x] `opencode_task_status`
+- [x] `opencode_task_status` syncs compact session progress
+- [x] `opencode_task_result`
+- [x] `opencode_task_cancel`: immediately records the cancel request; session abort is confirmed in the background
+- [x] Task state persisted to a local JSON state file
+- [x] `opencode_session_list`
+- [x] `opencode_session_messages`
+- [x] `opencode_session_messages` compresses large tool outputs by default to prevent oversized MCP responses
+- [x] `opencode_model_list`
+- [x] `opencode_runtime_status`
+- [x] `opencode_runtime_start`
+- [x] `opencode_runtime_stop`
+- [x] Legacy/debug tools hidden by default; set `OPENCODE_BRIDGE_DEBUG_TOOLS=1` to expose them
+- [x] UTF-8 Chinese text sending script verification
+- [x] Sub-agent architecture documentation
+- [x] Automated checks: syntax check, MCP stdio smoke test, tool listing test, state persistence test
+- [x] Live runtime smoke test: npm-global OpenCode, DeepSeek model listing, real conversation, runtime stop
+
+## Permission Capabilities
+
+- [x] Expose `opencode_permission_list`
+- [x] Read real pending permissions via `GET /permission`
+- [x] Sync permission queue in task status and flag `waiting_permission`
+- [x] Confirm official OpenCode permission reply API: `POST /permission/:requestID/reply`
+- [x] Wire up the real permission reply endpoint
+- [x] Expose `opencode_permission_reply`
+- [x] Expose running and blocked tool names, call IDs, input summaries, and durations
+- [x] Distinguish queued vs. executing tools to avoid falsely reporting argument-streaming phases as running
+- [x] Live `edit: ask` regression test: discover permission, reply `once`, task continues and completes
+- [x] Fix `always` permission reply remember semantics
+- [x] Cancel request returns immediately; session abort is confirmed in the background
+
+Current policy: `decision: "allow"` defaults to `once`; passing `remember: true` replies with `always`; `decision: "deny"` replies with `reject`. Permission requests are sourced from the OpenCode permission queue — no longer guessed from message parts.
+
+## Next Priorities
+
+- [ ] Add capacity limits, expiration cleanup, and recovery strategy for the task store
+- [ ] Add an adapter layer for the OpenCode API to isolate `/session`, `/api/model`, and other endpoint changes
+- [ ] Add task recovery hints after a runtime crash: pull history via `sessionID` and update the task
+- [ ] Add more mock OpenCode server tests covering runtime restarts, HTTP failures, cancellation, and permission scanning
+- [ ] Add permission policy configuration to support controlled auto-approval within explicitly authorized scopes
+- [x] Clean up early Desktop private-interface probing scripts and stale artifacts
+
+## Non-Core / Deferred
+
+- [ ] OpenCode Desktop viewer integration
+- [ ] Desktop session visual switching
+- [ ] Cross-platform Desktop sidecar detection
+
+These capabilities are not part of the first phase. The first phase focuses on making OpenCode work reliably as an MCP sub-agent.
+
+---
+
+# 功能进度 (中文版)
 
 架构原则见 `ARCHITECTURE.md`。当前方向是 managed headless OpenCode runtime，不再以 OpenCode Desktop bridge 为主线。
 

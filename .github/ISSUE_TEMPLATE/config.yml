@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/arctan303/opencode-mcp-agent#readme
+    about: Check the README and project documentation before opening an issue.
+  - name: Security Vulnerabilities
+    url: https://github.com/arctan303/opencode-mcp-agent/security/advisories/new
+    about: Report security vulnerabilities through GitHub Security Advisories.

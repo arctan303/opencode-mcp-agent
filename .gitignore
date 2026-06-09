@@ -18,3 +18,15 @@ opencode.*.json
 
 .test-tasks.json
 *.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
