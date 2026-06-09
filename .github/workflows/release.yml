@@ -61,7 +61,21 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: OpenCode MCP Agent ${{ github.ref_name }}
           generate_release_notes: true
+          body: |
+            ## 安装
+
+            ```bash
+            npm install -g opencode-mcp-agent
+            ```
+
+            或下载下方附件中的 tarball 手动安装。
+
+            完整文档请参阅 [README](https://github.com/arctan303/opencode-mcp-agent#readme)。
+
+            ---
+
           files: |
             dist/*.tgz
             dist/SHA256SUMS

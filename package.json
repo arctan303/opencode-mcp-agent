@@ -1,6 +1,6 @@
 {
   "name": "opencode-mcp-agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": false,
   "type": "module",
   "description": "Let your primary AI agent dispatch tasks to OpenCode — best model for planning, cost-effective model for execution.",
