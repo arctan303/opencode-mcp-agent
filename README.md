@@ -5,63 +5,65 @@
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
 [![npm version](https://img.shields.io/npm/v/opencode-mcp-agent.svg)](https://www.npmjs.com/package/opencode-mcp-agent)
 
-Use OpenCode as a managed MCP sub-agent.
+**简体中文 | [English](README.en.md)**
 
-OpenCode MCP Agent starts a private local `opencode serve` runtime and exposes task-oriented MCP tools for sending work, selecting a workspace and model, continuing sessions, observing progress, handling permissions, cancelling work, and collecting results.
+将 OpenCode 作为受管 MCP 子代理使用。
 
-The MCP server is client-agnostic and can be used by Codex and other clients that support stdio MCP servers.
+OpenCode MCP Agent 启动一个私有的本地 `opencode serve` runtime，并暴露面向任务的 MCP 工具，支持派发任务、选择工作空间和模型、延续会话、观察进度、处理权限、取消任务和收集结果。
 
-## Status
+MCP 服务器与客户端无关，可被 Codex 及其他支持 stdio MCP 服务器的客户端使用。
 
-The core workflow is functional and covered by automated and real-runtime tests:
+## 当前状态
 
-- Managed local OpenCode runtime
-- Explicit workspace and model selection
-- Asynchronous tasks with persistent task records
-- Session creation and continuation
-- Progress, running tool, and blocked tool reporting
-- OpenCode permission discovery and reply
-- Fast two-phase cancellation
-- Model and session discovery
+核心工作流已完成，并经过自动化测试和真实 runtime 测试验证：
 
-Version 1.0 provides the first stable task-oriented MCP interface. OpenCode API compatibility may still require updates when OpenCode changes its server endpoints.
+- 受管的本地 OpenCode runtime
+- 显式指定工作空间和模型
+- 异步任务与持久化任务记录
+- 会话创建与复用
+- 进度、运行中工具和阻塞工具上报
+- OpenCode 权限发现与回复
+- 快速两阶段取消
+- 模型和会话发现
 
-## How It Works
+1.0 版本提供首个稳定的面向任务的 MCP 接口。当 OpenCode 更改其服务端点时，API 兼容性可能需要更新。
+
+## 工作原理
 
 ```text
-MCP client
+MCP 客户端
   -> OpenCode MCP Agent
-    -> managed opencode serve
-      -> OpenCode agent, session, model and tools
+    -> 受管的 opencode serve
+      -> OpenCode agent、session、model 和 tools
 ```
 
-The runtime binds to `127.0.0.1` on a random port. The bridge generates random Basic Authentication credentials in memory and does not expose them to the MCP client.
+runtime 绑定到 `127.0.0.1` 的随机端口。桥接器在内存中生成随机 Basic Authentication 凭证，不会暴露给 MCP 客户端。
 
-OpenCode Desktop is not required and is not used as the control path.
+不需要 OpenCode Desktop，也不以它作为控制路径。
 
-## Requirements
+## 环境要求
 
-- Node.js 18 or newer
-- OpenCode CLI installed and configured
-- An MCP client that supports stdio servers
+- Node.js 18 或更新版本
+- 已安装并配置 OpenCode CLI
+- 支持 stdio 服务器的 MCP 客户端
 
-Confirm that OpenCode is available:
+确认 OpenCode 可用：
 
-```powershell
+```bash
 opencode --version
 ```
 
-If OpenCode is not on `PATH`, set `OPENCODE_BIN` to its executable path.
+如果 OpenCode 不在 `PATH` 中，请设置 `OPENCODE_BIN` 指向其可执行文件路径。
 
-## Quick Start
+## 快速开始
 
-### Install from npm
+### 从 npm 安装
 
 ```bash
 npm install -g opencode-mcp-agent
 ```
 
-Then register with your MCP client:
+然后在 MCP 客户端中注册：
 
 ```json
 {
@@ -73,23 +75,23 @@ Then register with your MCP client:
 }
 ```
 
-### Install from source
+### 从源码安装
 
-Clone the repository and run the checks:
+克隆仓库并运行检查：
 
-```powershell
+```bash
 git clone https://github.com/arctan303/opencode-mcp-agent.git
 cd opencode-mcp-agent
 npm run check
 ```
 
-Register it with Codex:
+在 Codex 中注册：
 
-```powershell
-codex mcp add opencode-control -- node C:\path\to\opencode-mcp-agent\server.mjs
+```bash
+codex mcp add opencode-control -- node /path/to/opencode-mcp-agent/server.mjs
 ```
 
-Generic stdio MCP configuration:
+通用 stdio MCP 配置：
 
 ```json
 {
@@ -102,98 +104,98 @@ Generic stdio MCP configuration:
 }
 ```
 
-Restart the MCP client after changing its configuration.
+更改配置后需重启 MCP 客户端。
 
-## Recommended Task Flow
+## 推荐的任务流程
 
-1. Call `opencode_model_list` to inspect configured models.
-2. Call `opencode_task_start` with an explicit `workspace`, normally using `wait: false`.
-3. Poll `opencode_task_status`.
-4. If the task enters `waiting_permission`, call `opencode_permission_list`, inspect the request, then call `opencode_permission_reply`.
-5. Read the final result with `opencode_task_result`.
+1. 调用 `opencode_model_list` 查看已配置的模型。
+2. 调用 `opencode_task_start`，显式指定 `workspace`，通常使用 `wait: false`。
+3. 轮询 `opencode_task_status`。
+4. 如果任务进入 `waiting_permission` 状态，调用 `opencode_permission_list` 查看请求，然后调用 `opencode_permission_reply` 回复。
+5. 使用 `opencode_task_result` 读取最终结果。
 
-Example task arguments:
+任务参数示例：
 
 ```json
 {
   "workspace": "C:\\projects\\example",
   "model": "provider/model",
-  "prompt": "Analyze this project and report performance risks. Do not modify files.",
+  "prompt": "分析这个项目并报告性能风险。不要修改文件。",
   "wait": false,
   "timeoutMs": 600000
 }
 ```
 
-`timeoutMs` is the maximum lifetime of the OpenCode model and tool request. It still applies when `wait` is `false` and is independent of any timeout imposed by the MCP client.
+`timeoutMs` 是 OpenCode 模型和工具请求的最大生存时间。即使 `wait` 为 `false` 也会生效，且独立于 MCP 客户端的超时设置。
 
-## MCP Tools
+## MCP 工具
 
-| Tool | Purpose |
+| 工具 | 用途 |
 |---|---|
-| `opencode_task_start` | Create or continue an OpenCode task |
-| `opencode_task_list` | Find persisted bridge tasks |
-| `opencode_task_status` | Refresh task, tool, session, and permission status |
-| `opencode_task_result` | Read the complete tracked task result |
-| `opencode_task_cancel` | Request cancellation without blocking on confirmation |
-| `opencode_session_list` | List OpenCode sessions |
-| `opencode_session_messages` | Read compact or raw session messages |
-| `opencode_model_list` | List models available to OpenCode |
-| `opencode_permission_list` | List real pending OpenCode permissions |
-| `opencode_permission_reply` | Reply with `once`, `always`, or `reject` |
-| `opencode_runtime_status` | Inspect the managed runtime |
-| `opencode_runtime_start` | Start the managed runtime |
-| `opencode_runtime_stop` | Stop the managed runtime |
+| `opencode_task_start` | 创建或继续 OpenCode 任务 |
+| `opencode_task_list` | 查找已持久化的桥接任务 |
+| `opencode_task_status` | 刷新任务、工具、会话和权限状态 |
+| `opencode_task_result` | 读取完整的任务结果 |
+| `opencode_task_cancel` | 请求取消，不阻塞等待确认 |
+| `opencode_session_list` | 列出 OpenCode 会话 |
+| `opencode_session_messages` | 读取紧凑或原始会话消息 |
+| `opencode_model_list` | 列出 OpenCode 可用模型 |
+| `opencode_permission_list` | 列出真实的待处理权限 |
+| `opencode_permission_reply` | 以 `once`、`always` 或 `reject` 回复 |
+| `opencode_runtime_status` | 检查受管 runtime 状态 |
+| `opencode_runtime_start` | 启动受管 runtime |
+| `opencode_runtime_stop` | 停止受管 runtime |
 
-Long-running calls should use `wait: false`. MCP requests are processed concurrently, so status and permission calls can run while another request is waiting.
+长时间运行的调用应使用 `wait: false`。MCP 请求是并发处理的，因此在另一个请求等待时仍可查询状态和回复权限。
 
-Cancellation is two-phase: `opencode_task_cancel` first returns `cancelRequested: true`; the task becomes `cancelled` after OpenCode confirms the session abort or the bridge observes an idle session with no open tool calls.
+取消是两阶段的：`opencode_task_cancel` 首先返回 `cancelRequested: true`；在 OpenCode 确认会话中止或桥接器观察到空闲会话后，任务变为 `cancelled`。
 
-## Configuration
+## 配置
 
-| Environment variable | Purpose |
+| 环境变量 | 用途 |
 |---|---|
-| `OPENCODE_BIN` | Explicit OpenCode executable path |
-| `OPENCODE_CONFIG` | Explicit OpenCode configuration file path |
-| `OPENCODE_BRIDGE_STATE` | Explicit task state JSON file path |
-| `OPENCODE_BRIDGE_DEBUG_TOOLS=1` | Expose legacy/debug MCP tools |
+| `OPENCODE_BIN` | OpenCode 可执行文件路径 |
+| `OPENCODE_CONFIG` | OpenCode 配置文件路径 |
+| `OPENCODE_BRIDGE_STATE` | 任务状态 JSON 文件路径 |
+| `OPENCODE_BRIDGE_DEBUG_TOOLS=1` | 暴露 legacy/debug MCP 工具 |
 
-By default, task state is stored outside the repository in the current user's local application state directory.
+默认情况下，任务状态存储在仓库外的用户本地应用状态目录中。
 
-## Security Model
+## 安全模型
 
-- The managed server listens only on `127.0.0.1`.
-- A random port and random Basic Authentication credentials are generated per runtime.
-- Runtime credentials remain in bridge process memory.
-- The bridge does not store model-provider credentials.
-- OpenCode permissions are forwarded, not bypassed.
-- `always` grants should be approved only after inspecting their permission type and patterns.
+- 受管服务器仅监听 `127.0.0.1`。
+- 每次 runtime 启动时生成随机端口和随机 Basic Authentication 凭证。
+- runtime 凭证仅存在于桥接器进程内存中。
+- 桥接器不存储模型供应商凭证。
+- OpenCode 权限被转发，而非绕过。
+- `always` 授权应在检查权限类型和模式后才批准。
 
-See [SECURITY.md](SECURITY.md) for reporting security issues.
+安全问题报告请参阅 [SECURITY.md](SECURITY.md)。
 
-## Development
+## 开发
 
-```powershell
+```bash
 npm run check
 ```
 
-The check command runs syntax validation and the Node.js test suite.
+check 命令运行语法检查和 Node.js 测试套件。
 
-Build the npm release artifact:
+构建 npm 发布产物：
 
-```powershell
+```bash
 npm run build
 ```
 
-The build runs all checks and writes the package tarball, `SHA256SUMS`, and `manifest.json` to `dist/`. The output directory is intentionally not committed; its files are suitable for an npm publish workflow or a GitHub Release.
+构建会运行所有检查，并将 tarball、`SHA256SUMS` 和 `manifest.json` 写入 `dist/`。输出目录不纳入版本控制；其文件适用于 npm publish 工作流或 GitHub Release。
 
-Project documentation:
+项目文档：
 
-- [BACKGROUND.md](BACKGROUND.md)
-- [ARCHITECTURE.md](ARCHITECTURE.md)
-- [ROADMAP.md](ROADMAP.md)
-- [CONTRIBUTING.md](CONTRIBUTING.md)
-- [CHANGELOG.md](CHANGELOG.md)
+- [项目背景 / BACKGROUND.md](BACKGROUND.md)
+- [架构设计 / ARCHITECTURE.md](ARCHITECTURE.md)
+- [功能进度 / ROADMAP.md](ROADMAP.md)
+- [贡献指南 / CONTRIBUTING.md](CONTRIBUTING.md)
+- [更新日志 / CHANGELOG.md](CHANGELOG.md)
 
-## License
+## 许可证
 
 MIT
