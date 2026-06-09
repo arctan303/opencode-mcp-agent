@@ -7,11 +7,51 @@
 
 **[简体中文](README.md) | English**
 
-Use OpenCode as a managed MCP sub-agent.
+Let your primary AI agent dispatch tasks directly to OpenCode — use the best model for planning, use the most cost-effective model for execution.
 
-OpenCode MCP Agent starts a private local `opencode serve` runtime and exposes task-oriented MCP tools for sending work, selecting a workspace and model, continuing sessions, observing progress, handling permissions, cancelling work, and collecting results.
+## Why This Tool?
 
-The MCP server is client-agnostic and can be used by Codex and other clients that support stdio MCP servers.
+In multi-agent workflows, you often face these challenges:
+
+- 🧠 **Planning** requires the strongest models (GPT-5.5, Claude Opus 4.6), but they are expensive
+- ⚡ **Code execution** consumes massive tokens (reading files, writing code, running tests) — using top-tier models is wasteful
+- 🔄 **Switching between agents** requires manually copying files and pasting context, breaking the workflow
+
+OpenCode MCP Agent solves these problems:
+
+```text
+Primary Agent (GPT-5.5 / Opus 4.6)
+  → Creates plans, designs architecture, breaks down tasks
+  → Dispatches work to OpenCode via MCP
+      → OpenCode uses cost-effective models (DeepSeek / Mimo) for execution
+      → Automatically returns results, status, and permission requests
+```
+
+**In one sentence**: Use the best brain for decisions, use the most economical hands for execution, with zero friction in between.
+
+## How It Works
+
+```text
+MCP Client (e.g. Codex, Claude Desktop)
+  → OpenCode MCP Agent (MCP server)
+    → Managed opencode serve (local runtime)
+      → OpenCode agent, session, model and tools
+```
+
+- The runtime binds to `127.0.0.1` on a random port; credentials exist only in process memory
+- OpenCode Desktop is not required
+- Works with any MCP client
+
+## Verified Environment
+
+| Component | Version |
+|-----------|---------|
+| OS | Windows 11 25H2 |
+| Node.js | v24.15.0 |
+| Primary Agent | Codex (GPT-5.5) |
+| Execution Agent | OpenCode (DeepSeek v4 Pro) |
+
+> This is the author's first MCP tool project. If you encounter issues in other environments, please [open an Issue](https://github.com/arctan303/opencode-mcp-agent/issues) to report bugs or suggest improvements — the project will be continuously improved.
 
 ## Status
 
@@ -26,20 +66,7 @@ The core workflow is functional and covered by automated and real-runtime tests:
 - Fast two-phase cancellation
 - Model and session discovery
 
-Version 1.0 provides the first stable task-oriented MCP interface. OpenCode API compatibility may still require updates when OpenCode changes its server endpoints.
-
-## How It Works
-
-```text
-MCP client
-  -> OpenCode MCP Agent
-    -> managed opencode serve
-      -> OpenCode agent, session, model and tools
-```
-
-The runtime binds to `127.0.0.1` on a random port. The bridge generates random Basic Authentication credentials in memory and does not expose them to the MCP client.
-
-OpenCode Desktop is not required and is not used as the control path.
+Version 1.0 provides the first stable task-oriented MCP interface.
 
 ## Requirements
 
@@ -77,8 +104,6 @@ Then register with your MCP client:
 
 ### Install from source
 
-Clone the repository and run the checks:
-
 ```bash
 git clone https://github.com/arctan303/opencode-mcp-agent.git
 cd opencode-mcp-agent
@@ -105,6 +130,22 @@ Generic stdio MCP configuration:
 ```
 
 Restart the MCP client after changing its configuration.
+
+## Typical Use Cases
+
+### Scenario 1: Separate Planning from Execution
+
+1. Use GPT-5.5 in Codex to create a project plan and design document
+2. GPT-5.5 dispatches implementation tasks directly to OpenCode via `opencode_task_start`
+3. OpenCode uses cost-effective models like DeepSeek v4 Pro for code writing
+4. The primary agent tracks progress via `opencode_task_status`
+5. Collects results with `opencode_task_result` when complete
+
+### Scenario 2: Parallel Batch Tasks
+
+1. The primary agent breaks a large task into multiple subtasks
+2. Dispatches them sequentially with `opencode_task_start` (`wait: false`)
+3. Queries status and results in parallel
 
 ## Recommended Task Flow
 
@@ -148,7 +189,7 @@ Example task arguments:
 
 Long-running calls should use `wait: false`. MCP requests are processed concurrently, so status and permission calls can run while another request is waiting.
 
-Cancellation is two-phase: `opencode_task_cancel` first returns `cancelRequested: true`; the task becomes `cancelled` after OpenCode confirms the session abort or the bridge observes an idle session with no open tool calls.
+Cancellation is two-phase: `opencode_task_cancel` first returns `cancelRequested: true`; the task becomes `cancelled` after OpenCode confirms the session abort.
 
 ## Configuration
 
@@ -186,7 +227,7 @@ Build the npm release artifact:
 npm run build
 ```
 
-The build runs all checks and writes the package tarball, `SHA256SUMS`, and `manifest.json` to `dist/`. The output directory is intentionally not committed; its files are suitable for an npm publish workflow or a GitHub Release.
+The build runs all checks and writes the package tarball, `SHA256SUMS`, and `manifest.json` to `dist/`.
 
 Project documentation:
 

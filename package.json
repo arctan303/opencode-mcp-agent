@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": false,
   "type": "module",
-  "description": "Use OpenCode as a managed MCP sub-agent runtime.",
+  "description": "Let your primary AI agent dispatch tasks to OpenCode — best model for planning, cost-effective model for execution.",
   "author": "arctan303",
   "keywords": [
     "mcp",
